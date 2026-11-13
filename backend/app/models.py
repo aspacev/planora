@@ -4,7 +4,6 @@ from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
-    LargeBinary,
     JSON,
     Boolean,
     CheckConstraint,
@@ -45,23 +44,6 @@ class Criticality(StrEnum):
 # the same values would one day diverge when a level is added — exactly as the
 # CHECK on roles would diverge if it were spelled out by hand.
 CRITICALITY_LEVELS: tuple[str, ...] = tuple(level.value for level in Criticality)
-
-
-class ProjectType(StrEnum):
-    """What kind of work a project is — it decides what the intake asks about.
-
-    A requirements document for software and a brief for an event leave different
-    things unsaid: the first rarely names the acceptance procedure, the second
-    rarely names who approves the spending. The list of topics per type lives in
-    config/intake_topics.yml; here is only the set of types itself.
-    """
-
-    SOFTWARE = "software"
-    EVENT = "event"
-    GENERAL = "general"
-
-
-PROJECT_TYPES: tuple[str, ...] = tuple(kind.value for kind in ProjectType)
 
 
 class TaskStatus(StrEnum):
@@ -394,10 +376,6 @@ class Project(Base):
             "schedule_mode IN (" + ", ".join(f"'{mode}'" for mode in SCHEDULE_MODES) + ")",
             name="ck_projects_schedule_mode",
         ),
-        CheckConstraint(
-            "project_type IN (" + ", ".join(f"'{kind}'" for kind in PROJECT_TYPES) + ")",
-            name="ck_projects_project_type",
-        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -448,11 +426,6 @@ class Project(Base):
     # of earlier revisions still hold dates of the old one — undoing them would
     # throw a task back to the relative epoch, the year 2001.
     undo_floor_seq: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
-    # The kind of work, as chosen in the intake that created the project. Empty
-    # for a project created by hand: nobody was asked. Not shown anywhere yet —
-    # kept so that what is built on it later (a quote from the document,
-    # organization templates) has something to start from.
-    project_type: Mapped[str | None] = mapped_column(String(16))
 
 
 class ProjectAccess(Base):
@@ -848,73 +821,6 @@ class AiSession(Base):
     draft: Mapped[dict] = mapped_column(JSONB, default=dict)
     tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     applied_batch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    # The kind of project: it selects the interview's topics (ProjectType).
-    project_type: Mapped[str] = mapped_column(
-        String(16), default=ProjectType.GENERAL, server_default=text("'general'")
-    )
-    # The document the session started from, if it started from one. SET NULL:
-    # deleting the document must not take the session — and with it the link
-    # from the created tasks to their origin — away.
-    document_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("project_documents.id", ondelete="SET NULL")
-    )
-    # How many parts of the document have been read. A long document is read in
-    # parts, one request per part: a single request reading all of it would not
-    # fit into a serverless function's time limit.
-    document_cursor: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
-    # What the document asks for: [{"id": 1, "section": "3.2", "text": "..."}].
-    # From here on the model works with this list rather than with the document's
-    # full text — otherwise fifty pages would be paid for again on every question.
-    requirements: Mapped[list] = mapped_column(
-        JSONB, default=list, server_default=text("'[]'::jsonb")
-    )
-    # One or two sentences on what the document is about — shown next to the
-    # suggested project type so that a person sees the document was understood.
-    brief: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
-    # The interview topics the document already answers; they are not asked about.
-    document_topics: Mapped[list] = mapped_column(
-        JSONB, default=list, server_default=text("'[]'::jsonb")
-    )
-
-
-class ProjectDocument(Base):
-    """The document a project was created from — the file itself and its text.
-
-    The file lives in the database rather than on a disk or in an object store:
-    the product has no external services, and a disk does not exist at all in the
-    serverless layout. The price is known and accepted — database backups grow by
-    the size of the uploads — and is bounded by MAX_DOCUMENT_BYTES.
-
-    `project_id` is empty until the draft is applied: before that there is no
-    project. A document whose session was abandoned is swept on a later upload
-    (see app.documents.sweep_abandoned).
-    """
-
-    __tablename__ = "project_documents"
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
-    )
-    # Unique: one document per project in this version. The index also serves the
-    # only query by this column — "the document of this project".
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), unique=True
-    )
-    filename: Mapped[str] = mapped_column(String(255))
-    content_type: Mapped[str] = mapped_column(String(100))
-    size_bytes: Mapped[int] = mapped_column(Integer)
-    sha256: Mapped[str] = mapped_column(String(64))
-    # Deferred: the two heavy columns are read only by the routes that serve the
-    # file and by the reading step — never by a query that merely asks whether a
-    # project has a document.
-    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
-    extracted_text: Mapped[str] = mapped_column(Text, deferred=True)
-    # SET NULL — for the same reason as plan_versions.approved_by.
-    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

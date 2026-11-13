@@ -6,9 +6,9 @@ fact about each that you would otherwise have to open the file to learn. For
 *rules* (how to add a route, a mutation, a permission) see `../SKILL.md`; for
 tables see `data-model.md`; for tests see `testing.md`.
 
-Size, for calibration: backend `app/` ≈ 17k lines of Python in 75 files;
-`backend/tests/` ≈ 21k lines, 53 files, 924 tests; frontend `src/` has 75
-test files with 791 tests. One Alembic head, 28 migrations.
+Size, for calibration: backend `app/` ≈ 20k lines of Python in 68 files;
+`backend/tests/` ≈ 17k lines, 51 files, 885 tests; frontend `src/` has 74
+test files with 781 tests. One Alembic head, 29 migrations.
 
 ## What the product does (feature inventory)
 
@@ -34,7 +34,6 @@ test files with 791 tests. One Alembic head, 28 migrations.
 - **Exports**: XLSX and PDF of the project; proposal PDF.
 - **AI intake**: an LLM interview → summary → draft plan → applied as one
   undoable batch; also "split this task". Bring-your-own key per organization.
-- **Jira**: import a Jira project, re-sync, push due dates back.
 - **Live updates** over WebSocket (Docker only), with an offline lock.
 - **Accounts**: registration, login, email verification, password reset,
   invitations, multiple organizations per user, roles owner / editor /
@@ -97,7 +96,6 @@ test files with 791 tests. One Alembic head, 28 migrations.
 | `scorecard.py` | Metrics `overdue_tasks`, `finish_drift`, `scope_growth`, `date_shifts`, `close_rate`, `stale_in_progress`, `data_quality`, `team_pace`; ISO weeks in the project timezone; lazy weekly commit on GET; alerts; drill-down tasks. No scheduler anywhere. |
 | `export/` | `document.py` builds one localized, permission-trimmed snapshot read by both renderers; `xlsx.py` (openpyxl); `pdf.py` (reportlab canvas, vector Gantt); `proposal_pdf.py` (client document); `budget.py` page/zoom budget (mirrored by `frontend/src/export/pageBudget.ts`); `labels.py` + `labels/{az,en,ru}.json`; `theme.py` colours copied from the frontend CSS; `fonts/` Inter. |
 | `ai/` | `credentials.py`, `provider.py` (`LlmProvider` protocol, `HttpProvider`, `RecordedProvider`), `netguard.py` (SSRF), `schemas.py` (model output validation), `intake.py` (interview → summary → draft → apply; split task), `usage.py` (daily token budget, `MeteredProvider`). Topics come from `config/intake_topics.yml`. |
-| `jira/` | `credentials.py`, `client.py` (`JiraClient` protocol, `HttpJiraClient`, `RecordedJiraClient`), `netguard.py`, `mapping.py` (pure issue → task functions), `sync.py` (`import_project`, `sync_project`, `push_project`). |
 
 ### HTTP layer — `backend/app/api/`
 
@@ -121,7 +119,6 @@ the public page (two visibility flags, one assembly).
 | `public_routes.py` | `/api/public/{org_slug}/{project_slug}` | State, comments, counts, guest comment, `export.xlsx/pdf`. No session; every refusal is 404 `link_not_found`. |
 | `live_routes.py` | `/api/projects/{id}/live` | WebSocket; Origin-checked handshake; per-socket visibility of notes. |
 | `ai_routes.py` | `/api/ai` | `credential`, `sessions` and their `answers` / `summary` / `draft` / `apply`, `tasks/{id}/split` (+ `/apply`). |
-| `jira_routes.py` | `/api/jira`, `/api/projects/{id}/jira` | `credential`, `projects`, `import`; per project: link, `sync`, `push`. Two routers. |
 | `admin_routes.py` | `/api/admin/users` | Director only. |
 
 `backend/openapi.json` is the committed snapshot of `app.openapi()`;
@@ -141,9 +138,10 @@ milestone → `a3f9c25e71b0` project auto_schedule → `d7e2b41c8f60` proposal �
 `b8d1e5f30a72` proposal notes → `e3c9a5d17b42` verification sent/used →
 `c1d4a8f6e293` membership project_scoped → `f1a4c8d7b6e2` user
 last_active_at → `b4e7a2c9d3f1` scorecard → `342f2b35de69` jira →
-`12c30f757a97` jira push due date → `a1b2c3d4e5f6` scorecard signal cleanup →
+`12c30f757a97` jira push due date (both undone by the last one) → `a1b2c3d4e5f6` scorecard signal cleanup →
 `c4d8e2f1a9b7` proposal status + plan links → `d5e8f1a2b3c4` task risk →
-**`e7a3c9b1d4f2` project undo floor (head)**. A new migration sets `down_revision` to the current head — confirm
+`e7a3c9b1d4f2` project undo floor →
+**`f4b8d2c6a1e9` drop jira integration (head)**. A new migration sets `down_revision` to the current head — confirm
 it with `uv run alembic heads` rather than trusting this list.
 
 ## Frontend — `frontend/src/`
@@ -159,7 +157,7 @@ its component.
 Public: `/register`, `/login`, `/forgot-password`, `/reset-password`,
 `/verify-email`, `/invite/:token`, `/p/:orgSlug/:projectSlug` (public page).
 Behind `RequireAuth`: `/` → `/projects`; `/projects`; `/my-tasks`;
-`/projects/new/ai`; `/projects/new/jira`; `/projects/:projectId` and its tabs
+`/projects/new/ai`; `/projects/:projectId` and its tabs
 `/proposal`, `/scorecard`, `/history`; `/projects/:projectId/settings`;
 `/settings` with `organization`, `members`, `profile`; `/admin`. Legacy
 `/members`, `/portfolio`, `/reports` redirect.
@@ -168,9 +166,9 @@ Behind `RequireAuth`: `/` → `/projects`; `/projects`; `/my-tasks`;
 
 | Folder | Contents |
 |---|---|
-| `api/` | `client.ts`: `request<T>()`, `requestFile()`, `ApiError { code, status, hints }` (hints from `X-Shift-*` headers), `saveFile`. One wrapper per resource: `auth`, `org`, `projects`, `revisions`, `comments`, `proposal`, `scorecard`, `share`, `public`, `export`, `invitations`, `ai`, `jira`, `admin`, `config`. `errors.ts` = explicit list of error codes that have a translation. `schema.d.ts` generated. |
+| `api/` | `client.ts`: `request<T>()`, `requestFile()`, `ApiError { code, status, hints }` (hints from `X-Shift-*` headers), `saveFile`. One wrapper per resource: `auth`, `org`, `projects`, `revisions`, `comments`, `proposal`, `scorecard`, `share`, `public`, `export`, `invitations`, `ai`, `admin`, `config`. `errors.ts` = explicit list of error codes that have a translation. `schema.d.ts` generated. |
 | `auth/` | `AuthProvider` (three states: checking / signed in / anonymous), `RequireAuth`, `afterAuth` (where to land), `invite` (pending-invite handoff), `permissions.ts` (`roleCanWrite`, `roleCanReadProposal`, `useCanWrite`, `useOrgRole` — mirrors the server matrix for *showing* controls only), `verificationNotice`. |
-| `screens/` | One file per route: `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `VerifyEmail`, `Invite`, `Projects`, `MyTasks`, `Project` (tabs: chart / proposal / scorecard / history), `ProjectSettings`, `PublicProject`, `Settings` (+ `OrgSettings`, `Members`, `Profile`), `Admin`, `AiIntake`, `JiraImport`; `ShareDialog`, `CategoryForm`; `projectStates.ts` (list + per-project state queries shared by Projects and My tasks). |
+| `screens/` | One file per route: `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `VerifyEmail`, `Invite`, `Projects`, `MyTasks`, `Project` (tabs: chart / proposal / scorecard / history), `ProjectSettings`, `PublicProject`, `Settings` (+ `OrgSettings`, `Members`, `Profile`), `Admin`, `AiIntake`; `ShareDialog`, `CategoryForm`; `projectStates.ts` (list + per-project state queries shared by Projects and My tasks). |
 | `gantt/` | The hand-built chart. Pure math: `scale.ts` (zoom levels, `DAY_WIDTH`), `timescale.ts` (ISO-string dates ↔ pixels, no `Date` objects), `relative.ts` (Day N axis), `columns.ts` (pinned table columns), `motion.ts`, `edgeScroll.ts`. Components: `Gantt`, `Grid`, `Header`, `Row`, `Cells`, `Arrows` (dependency elbows), `BarTip`, `NewTaskRow`, `RowMenu`, `AssignMenu`, `ViewControls`, `BottomActions`, `UndoMove`. Hooks: `useDragDates`, `useDragCategory`, `useLinkDrag`, `useReorder`, `useBarMotion`, `useGanttView`, `useViewportFit`, `useLaneWidth`, `useQuickTask`, `useQuickCategory`, `useTruncatedTitle`, `scalePreference`. |
 | `project/` | Everything around the chart: `useProjectMutation` (the single optimistic write path: snapshot → show → send → roll back or refetch; handles `reason_required`), `optimistic.ts` (state transforms, no calendar math), `useUndo`, `UndoHotkey`, `baseline.ts` (deviation rule mirrored from the server), `ShiftReason`, `PlanApproval`, `PlanChangesPanel` + `planChanges.ts`, `PlanSummary` + `summary.ts`, `progress.ts` (duration-weighted readiness), `verdict.ts` (overdue vs. past-deadline), `ProjectHead`, `ProjectBar`, `ProjectHistory`, `DependencyNudge`, `StartDateDialog`, `SharePanel`, `ShareControls`, `categoryColors`, `useDeleteProject`. |
 | `task/` | `TaskPanel` (the task card: fields, dependencies, tabs), `Comments`, `History`, `TaskProgress`, `formatEvent.ts` (journal entry → localized phrase), `fields`, `PanelSection`. |

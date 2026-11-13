@@ -172,21 +172,6 @@ const PLAIN_CODES = new Set([
   "metric_not_found",
   "week_in_future",
   "target_out_of_range",
-  // Jira. The same principle as with the LLM refusals: a third-party service's failure
-  // is not a breakage but a state a person is told about in words.
-  "jira_not_configured",
-  "jira_not_linked",
-  "jira_unreachable",
-  "jira_refused",
-  "jira_unauthorized",
-  "jira_not_found",
-  "jira_bad_json",
-  "jira_bad_shape",
-  "jira_key_unreadable",
-  "jira_token_required",
-  "jira_url_not_https",
-  "jira_url_invalid",
-  "jira_url_private",
 ]);
 
 /** The dictionary key the error is explained by. The raw code never gets out. */

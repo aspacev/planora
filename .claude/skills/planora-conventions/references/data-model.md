@@ -198,22 +198,3 @@ handed over by the team, not downloaded by the client.
 - **AiSession** — an in-progress AI intake interview/draft, separate from
   `Project` because nothing is written to a real project until the human
   applies the draft.
-
-## Jira integration
-
-- **JiraConnection** — one per org (Basic auth: `base_url` + `email` +
-  `encrypted_token`, same never-decrypted-for-output rule as
-  `OrgLlmCredential`). See `integration-pattern.md`.
-- **JiraProjectLink** — one per Planora project; records the Jira project
-  key and the `jql` of the original import so re-sync asks Jira about the
-  same subset, not the whole instance.
-- **JiraCategoryLink** / **JiraTaskLink** — per-row sync bookkeeping keyed
-  by Jira's human-readable `issue_key`, linking a Jira epic/issue to the
-  `Category`/`Task` it was imported as. `JiraTaskLink.task_id` is
-  `SET NULL` (not `CASCADE`, unlike the rest of this module) so deleting a
-  task in Planora doesn't get silently resurrected by the next sync — the
-  orphaned link row is a tombstone that keeps the issue key from looking
-  "new" again. `JiraTaskLink.pushed_due_date` flips a single task's
-  dates from Jira-owned to Planora-owned once its due date has been pushed
-  back to Jira; `NULL` means Jira is still the source of truth for that
-  task's schedule.

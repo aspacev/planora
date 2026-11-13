@@ -58,13 +58,13 @@ entity map and `references/dev-workflow.md` for exact commands:
 
 | Path | What's there |
 |---|---|
-| `backend/app/api/*_routes.py` | One FastAPI router per resource area (auth, org, project, proposal, scorecard, export, share, public, live, invite, admin, ai, jira, meta). |
+| `backend/app/api/*_routes.py` | One FastAPI router per resource area (auth, org, project, proposal, scorecard, export, share, public, live, invite, admin, ai, meta). |
 | `backend/app/api/deps.py` | Shared per-request dependencies — `ProjectContext` (project + org + role + `.require(Action)`). Read this before writing a new project-scoped route. |
 | `backend/app/models.py` | Every SQLAlchemy model and every `StrEnum`. Single file, deliberately — one place to see the whole schema. |
 | `backend/app/mutations.py` | The plan-edit engine — see "The mutation/revision pattern" below. |
 | `backend/app/access.py` | `Action` enum + `Role → frozenset[Action]` matrix. The permission system. |
-| `backend/app/crypto.py` | Fernet encryption for secrets this app stores at rest (the LLM key and the Jira API token both go through it). |
-| `backend/app/ai/`, `backend/app/jira/` | Two concrete "third-party integration, per organization, with a secret" implementations — see `references/integration-pattern.md`. |
+| `backend/app/crypto.py` | Fernet encryption for secrets this app stores at rest (the LLM key goes through it). |
+| `backend/app/ai/` | The concrete "third-party integration, per organization, with a secret" implementation — see `references/integration-pattern.md`. |
 | `backend/app/director.py` | `is_director()` — the single install-wide admin role (from `DIRECTOR_EMAIL`), distinct from any org's `Role.owner`. Backs the `/admin` panel. |
 | `backend/migrations/versions/` | Alembic, linear history, hand-written `upgrade`/`downgrade` (no autogenerate magic). |
 | `backend/tests/` | pytest, one `test_*.py` per concern, runs against a real `<db>_test` Postgres. |
@@ -118,12 +118,12 @@ but owner." `Role.CLIENT` and the anonymous-guest role (`None`) are
 
 ## Secrets, integrations, and outbound HTTP — read `references/integration-pattern.md`
 
-Planora has two "connect a third-party service, per organization, with a
-secret" features, both following the same shape: the LLM/AI connection
-(`backend/app/ai/credentials.py` + `provider.py` + `netguard.py`) and the
-Jira connection (`backend/app/jira/credentials.py` + `client.py` +
-`netguard.py`, API-key/Basic-auth, not OAuth). Either is the template to copy
-for anything OAuth/API-key/webhook shaped:
+Planora has one "connect a third-party service, per organization, with a
+secret" feature: the LLM/AI connection (`backend/app/ai/credentials.py` +
+`provider.py` + `netguard.py`). It is the template to copy for anything
+OAuth/API-key/webhook shaped (a Jira integration built on the same shape
+existed and was removed; its tables are dropped by migration
+`f4b8d2c6a1e9`):
 
 - Encrypt the secret with `app.crypto.encrypt`/`decrypt` (Fernet, keyed from
   `APP_SECRET`), store it in an `encrypted_*` column, and **never return it
@@ -142,14 +142,12 @@ for anything OAuth/API-key/webhook shaped:
   comments) — pick based on whether the limit must survive a process
   restart and be correct across replicas.
 - There is currently **no OAuth-client flow and no webhook receiver** in the
-  codebase — Planora only issues its own session tokens today, and both the
-  AI and Jira connections deliberately chose API-key/Basic auth over OAuth
-  (see `backend/app/jira/credentials.py`'s docstring for why, for Jira Cloud
-  specifically). Building an OAuth-consumer flow or a webhook receiver is
-  still new ground; follow the secrets-at-rest and SSRF conventions above,
-  and put the new provider behind a `Protocol` like `LlmProvider`/`JiraClient`
-  so it's swappable/fakeable in tests the way `RecordedProvider`/
-  `RecordedJiraClient` fake the real outbound call.
+  codebase — Planora only issues its own session tokens today, and the AI
+  connection uses an API key rather than OAuth. Building an OAuth-consumer
+  flow or a webhook receiver is still new ground; follow the secrets-at-rest
+  and SSRF conventions above, and put the new provider behind a `Protocol`
+  like `LlmProvider` so it's swappable/fakeable in tests the way
+  `RecordedProvider` fakes the real outbound call.
 
 ## Dashboards and charts: no charting library — hand-build SVG
 

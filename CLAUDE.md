@@ -9,7 +9,7 @@ Before writing or reviewing code in `backend/app` or `frontend/src` — and
 background job, dashboard metric, or a new third-party integration (OAuth
 flow, webhook receiver, API-key-based service) — load the `planora-conventions`
 skill. It's the architecture map for this repo (data model, the
-mutation/revision engine, the permissions matrix, the existing AI/Jira
+mutation/revision engine, the permissions matrix, the existing AI
 integration pattern to copy for any new integration, dev-workflow commands)
 and is much cheaper than re-deriving any of this by exploring the tree. Its
 `references/codebase-map.md` describes every module, route and folder — read
@@ -44,7 +44,7 @@ that instead of scanning the code to learn what the app does.
 | `backend/app/mutations.py` | The plan-edit engine — every Gantt edit goes through here, not a direct `UPDATE`. |
 | `backend/app/access.py` | `Action` enum + `Role → frozenset[Action]` permission matrix. |
 | `backend/app/crypto.py` | Fernet encryption for secrets at rest. |
-| `backend/app/ai/`, `backend/app/jira/` | Two "add a third-party integration" implementations (credentials, provider/client, SSRF guard) — either is a template for a new one. |
+| `backend/app/ai/` | The "add a third-party integration" implementation (credentials, provider, SSRF guard) — the template for a new one. |
 | `backend/migrations/versions/` | Alembic, linear history, hand-written upgrade/downgrade. |
 | `frontend/src/api/*.ts` | One thin wrapper per backend resource, through `api/client.ts`'s `request<T>()`. |
 | `frontend/src/{gantt,scorecard,project,proposal,task,comments,auth,live,screens,components}/` | Feature-first folders; `*.test.tsx` colocated. |

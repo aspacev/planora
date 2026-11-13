@@ -20,7 +20,7 @@
 5. **The full suite is CI's job.** Run it locally (`--run --full`) only in the
    cases listed under "When the full suite is still required".
 
-Measured on a 4-core cloud container: backend 924 tests ≈ 2 min, frontend 791
+Measured on a 4-core cloud container: backend 885 tests ≈ 2 min, frontend 781
 tests ≈ 1.5 min, `tsc -b` ≈ 8 s, lint < 1 s. A typical feature change selects
 1–4 backend test files (seconds).
 
@@ -93,7 +93,7 @@ lacks: starts the local Postgres cluster, creates role `planora` (with
 For a bare `uv run pytest`, export
 `DATABASE_URL=postgresql+psycopg://planora:planora@localhost:5432/planora`
 (or have a root `.env`). `conftest.py` supplies `APP_SECRET`,
-`DIRECTOR_EMAIL` and switches the AI/Jira SSRF guards and AI limits off for
+`DIRECTOR_EMAIL` and switches the AI SSRF guard and AI limits off for
 the general run. Tests always use `<db>_test` and refuse any other name.
 
 **Two backend runs must not overlap**: the session fixture does
@@ -107,8 +107,7 @@ scope, recreates the schema from the models — *not* from migrations), `db`
 (a session in a transaction rolled back after the test), `mailbox`
 (captures letters instead of sending). API tests build a `TestClient` with
 `app.dependency_overrides[get_db]` pointing at that `db`. No test touches
-the network: LLM and Jira go through `RecordedProvider` /
-`RecordedJiraClient`, mail through `mailbox` or stubbed `smtplib`/`urlopen`.
+the network: the LLM goes through `RecordedProvider`, mail through `mailbox` or stubbed `smtplib`/`urlopen`.
 
 | Concern | Test files |
 |---|---|
@@ -122,7 +121,7 @@ the network: LLM and Jira go through `RecordedProvider` /
 | Proposal | `test_proposal_api`, `test_proposal_money` |
 | Scorecard | `test_scorecard` |
 | Export | `test_export_api` (opens the real XLSX/PDF with openpyxl/pypdf) |
-| AI, Jira | `test_ai_intake`, `test_jira_api`, `test_jira_mapping`, `test_jira_netguard` |
+| AI | `test_ai_intake` |
 | Mail, live | `test_mail`, `test_live_hub`, `test_live_api` |
 | Whole product | `test_end_to_end` (interview → approve → shift → public link) |
 | Remediation waves | `test_wave1_integrity`, `test_wave2_security`, `test_wave3_operations`, `test_wave4_api_design` — regression tests named after `docs/audit/remediation-plan.md`; `test_wave5_defect_scan` — regressions from the full code scan |
@@ -152,7 +151,7 @@ Vitest + jsdom + Testing Library, colocated with the source. Harness in
   every test; `localStorage` cleared after; async timeout 5 s (test timeout
   15 s in `vite.config.ts`).
 - `server.ts` — default handlers for what the app frame always asks
-  (`/api/config`, `/api/org/list`, comment counts, the Jira link).
+  (`/api/config`, `/api/org/list`, comment counts).
 - `utils.tsx` — `renderApp({ route, locale })` (the whole app with real
   routes and a `data-testid="location"` probe — assert navigation by where
   the user landed, not by mocking `useNavigate`), `renderWithProviders`,

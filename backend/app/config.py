@@ -101,16 +101,6 @@ class Settings(BaseSettings):
     #: installation with a local model on its own network.
     ai_allow_private_urls: bool = False
 
-    jira_request_timeout: int = 30
-    #: The same switch as ai_allow_private_urls, and for the same reason (SSRF
-    #: protection — the Jira site address is set by a user while the server is what
-    #: goes there): off by default, true means a self-hosted Jira on a private network.
-    jira_allow_private_urls: bool = False
-    #: The ceiling on issues an import or a sync handles in a single call. An
-    #: explicit refusal line on overflow rather than silent truncation: a plan
-    #: truncated without warning looks complete.
-    jira_max_issues_per_sync: int = 500
-
     max_tasks_per_project: int = 2000
     max_text_len: int = 4000
     #: The ceiling on a request body's size in bytes. An order of magnitude above

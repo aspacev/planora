@@ -59,11 +59,6 @@ export function CreateProjectActions() {
       <Link to="/projects/new/ai" className="button-link">
         {t("projects.create_with_ai")}
       </Link>
-      {/* Import from Jira is a third way to create a project, by the same rule as the interview: it
-          only works for a new project. */}
-      <Link to="/projects/new/jira" className="button-link">
-        {t("projects.create_from_jira")}
-      </Link>
 
       {open && (
         <Modal title={t("projects.new.title")} onClose={close} dirty={name !== ""}>

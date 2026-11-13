@@ -5,7 +5,6 @@ import { Admin } from "./screens/Admin";
 import { AiIntake } from "./screens/AiIntake";
 import { ForgotPassword } from "./screens/ForgotPassword";
 import { Invite } from "./screens/Invite";
-import { JiraImport } from "./screens/JiraImport";
 import { Login } from "./screens/Login";
 import { Members } from "./screens/Members";
 import { MyTasks } from "./screens/MyTasks";
@@ -61,10 +60,6 @@ export function AppRoutes() {
         {/* The interview is available only when creating a new project: launching
             it inside an existing one is the next stage, not the first version. */}
         <Route path="/projects/new/ai" element={<AiIntake />} />
-        {/* Import from Jira follows the same rule as the interview: it creates a
-            new project, while repointing an existing one at a different Jira
-            project is not the first version. */}
-        <Route path="/projects/new/jira" element={<JiraImport />} />
         <Route path="/projects/:projectId" element={<Project />} />
         {/* The proposal is a tab of the same screen with an address of its own, by
             the same rule as the history: a quote is discussed in conversations, and

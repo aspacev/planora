@@ -3,16 +3,9 @@ import { useState } from "react";
 
 import { AI_CREDENTIAL_QUERY_KEY, readCredential, saveCredential } from "../api/ai";
 import { errorKey } from "../api/errors";
-import {
-  JIRA_CREDENTIAL_QUERY_KEY,
-  disconnectJira,
-  readJiraCredential,
-  saveJiraCredential,
-} from "../api/jira";
 import { ORG_QUERY_KEY, checkOrgSlug, organization, updateOrganization } from "../api/org";
 import type { Organization, OrganizationSettings } from "../api/org";
 import { SaveMark, SelectField, TextField, useFieldSaves } from "../components/autosave";
-import { ConfirmAction } from "../components/ConfirmAction";
 import { useToast } from "../components/toast";
 import { SUPPORTED_LOCALES } from "../i18n";
 import { useLocale } from "../i18n/LocaleProvider";
@@ -177,8 +170,6 @@ export function OrgSettings() {
 
         <LlmConnection readOnly={readOnly} />
 
-        <JiraConnection readOnly={readOnly} />
-
         <p className="field field--inline">
           <input
             id="org-comments"
@@ -299,125 +290,6 @@ function LlmConnection({ readOnly }: { readOnly: boolean }) {
       <button type="submit" disabled={readOnly || save.isPending}>
         {t("settings.llm.save")}
       </button>
-    </form>
-  );
-}
-
-/**
- * The Jira connection: the site address, the email, the API token.
- *
- * The same discipline as the LLM connection's: the token is never handed out, and an empty field
- * on save means "keep the previous one".
- */
-function JiraConnection({ readOnly }: { readOnly: boolean }) {
-  const { t } = useLocale();
-  const queryClient = useQueryClient();
-  const showToast = useToast();
-  const [token, setToken] = useState("");
-
-  const credential = useQuery({
-    queryKey: JIRA_CREDENTIAL_QUERY_KEY,
-    queryFn: readJiraCredential,
-    retry: false,
-  });
-
-  const save = useMutation({
-    mutationFn: saveJiraCredential,
-    onSuccess: (result) => {
-      queryClient.setQueryData(JIRA_CREDENTIAL_QUERY_KEY, result);
-      setToken("");
-      showToast({ message: t("common.saved") });
-    },
-  });
-
-  const disconnect = useMutation({
-    mutationFn: disconnectJira,
-    onSuccess: () => {
-      queryClient.setQueryData(JIRA_CREDENTIAL_QUERY_KEY, {
-        base_url: "",
-        email: "",
-        configured: false,
-      });
-      showToast({ message: t("common.saved") });
-    },
-  });
-
-  // A 403 refusal here is not a breakage: a non-owner simply does not see this block.
-  if (credential.error || !credential.data) return null;
-  const current = credential.data;
-
-  return (
-    <form
-      className="settings__fieldset"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const form = new FormData(event.currentTarget as HTMLFormElement);
-        save.mutate({
-          base_url: String(form.get("jira-base-url") ?? ""),
-          email: String(form.get("jira-email") ?? ""),
-          api_token: token,
-        });
-      }}
-    >
-      <h2>{t("settings.jira.title")}</h2>
-      <p className="muted">{t("settings.jira.hint")}</p>
-
-      <p className="field">
-        <label htmlFor="jira-base-url">{t("settings.jira.base_url")}</label>
-        <input
-          id="jira-base-url"
-          name="jira-base-url"
-          defaultValue={current.base_url}
-          disabled={readOnly}
-        />
-      </p>
-
-      <p className="field">
-        <label htmlFor="jira-email">{t("settings.jira.email")}</label>
-        <input
-          id="jira-email"
-          name="jira-email"
-          type="email"
-          defaultValue={current.email}
-          disabled={readOnly}
-        />
-      </p>
-
-      <p className="field">
-        <label htmlFor="jira-token">{t("settings.jira.token")}</label>
-        <span className="muted">
-          {current.configured ? t("settings.jira.token_set") : t("settings.jira.token_missing")}
-        </span>
-        <input
-          id="jira-token"
-          name="jira-token"
-          type="password"
-          autoComplete="off"
-          value={token}
-          disabled={readOnly}
-          onChange={(event) => setToken(event.target.value)}
-        />
-      </p>
-
-      {save.error !== null && (
-        <p className="error" role="alert">
-          {t(errorKey(save.error))}
-        </p>
-      )}
-
-      <button type="submit" disabled={readOnly || save.isPending}>
-        {t("settings.jira.save")}
-      </button>
-      {current.configured && !readOnly && (
-        <ConfirmAction
-          className="button--quiet"
-          label={t("settings.jira.disconnect")}
-          warning={t("settings.jira.disconnect_warning")}
-          confirm={t("settings.jira.disconnect_confirm")}
-          onConfirm={() => disconnect.mutate()}
-          disabled={disconnect.isPending}
-        />
-      )}
     </form>
   );
 }

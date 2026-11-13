@@ -203,6 +203,7 @@
     "offline": "No connection to the server: the change was not sent",
     "nothing_to_undo": "There is nothing to undo",
     "undo_conflict": "The project has changed — undoing would take back the wrong step",
+    "batch_has_later_tasks": "Tasks were added to this batch's sections afterwards — move or delete them, then undo the batch again",
     "batch_not_found": "That batch was not found",
     "reason_required": "This shift needs a reason",
     "slug_taken": "That address is already taken",
@@ -246,19 +247,6 @@
     "metric_not_found": "No such metric",
     "week_in_future": "That week has not started yet",
     "target_out_of_range": "The target cannot be negative",
-    "jira_not_configured": "No Jira is connected",
-    "jira_not_linked": "This project wasn't set up from Jira",
-    "jira_unreachable": "Jira is unreachable",
-    "jira_refused": "Jira refused the request",
-    "jira_unauthorized": "Jira refused access — check the email and token",
-    "jira_not_found": "Jira answered 404",
-    "jira_bad_json": "Jira's answer could not be read",
-    "jira_bad_shape": "Jira's answer is missing expected fields",
-    "jira_key_unreadable": "The token cannot be decrypted: APP_SECRET changed",
-    "jira_token_required": "A token is required for the first connection",
-    "jira_url_not_https": "The Jira address must be https",
-    "jira_url_invalid": "The Jira address is invalid",
-    "jira_url_private": "The Jira address does not resolve to a public host",
     "proposal_nothing_to_push": "Nothing to move: the selected work items are already in the plan or have no estimate",
     "proposal_value_out_of_range": "The conversion does not fit the allowed range: lower the estimates or rates",
     "export_empty_selection": "Pick at least one section to export",
@@ -295,8 +283,7 @@
     "card": {
       "menu": "Project actions"
     },
-    "delete_title": "Delete the “{name}” project?",
-    "create_from_jira": "Import from Jira"
+    "delete_title": "Delete the “{name}” project?"
   },
   "project": {
     "period": "{from} — {to}",
@@ -905,19 +892,6 @@
       "key_set": "A key is set. Leave empty to keep it",
       "key_missing": "No key yet",
       "save": "Save the connection"
-    },
-    "jira": {
-      "title": "Jira",
-      "hint": "Site address, account email and an API token — to import projects from Jira",
-      "base_url": "Site address (base URL)",
-      "email": "Account email",
-      "token": "API token",
-      "token_missing": "No token yet",
-      "token_set": "A token is set. Leave empty to keep it",
-      "save": "Save the connection",
-      "disconnect": "Disconnect",
-      "disconnect_warning": "Projects will stop syncing with Jira. Tasks already imported stay where they are.",
-      "disconnect_confirm": "Yes, disconnect"
     }
   },
   "ai": {
@@ -944,35 +918,6 @@
       "drop": "Remove",
       "project_name": "Project name",
       "apply": "Apply to a project"
-    }
-  },
-  "jira": {
-    "not_configured": "Jira isn't connected: the address and token are set in organization settings",
-    "import": {
-      "title": "Import from Jira",
-      "back": "To projects",
-      "loading_projects": "Loading Jira projects…",
-      "empty_projects": "This connection doesn't see any projects in Jira",
-      "project_label": "Jira project",
-      "project_placeholder": "Choose a project",
-      "name_label": "Project name in Planora",
-      "submit": "Import",
-      "imported": "Project “{name}” imported from Jira"
-    },
-    "sync": {
-      "title": "Jira",
-      "hint": "This project was set up from Jira ({key}): syncing updates statuses and dates and adds new tasks. Changes made here to rows already brought over can be overwritten by a sync.",
-      "never": "not synced yet",
-      "last_synced": "Last synced: {date}",
-      "button": "Sync now",
-      "result": "Done: new tasks — {createdTasks}, updated — {updatedTasks}"
-    },
-    "push": {
-      "hint": "Sends the due date of tasks whose dates you've changed here back to Jira. Once a task's date is pushed, syncing from Jira stops touching it.",
-      "button": "Push to Jira",
-      "result": "Done: sent — {pushed}, unchanged — {unchanged}",
-      "result_with_failures": "Done: sent — {pushed}, unchanged — {unchanged}, Jira rejected — {failed}",
-      "failures": "Jira rejected the due date for: {keys}"
     }
   },
   "proposal": {

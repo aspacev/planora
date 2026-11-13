@@ -16,14 +16,9 @@ os.environ.setdefault("AI_ALLOW_PRIVATE_URLS", "true")
 # on a specific settings object.
 os.environ.setdefault("AI_REQUESTS_PER_MINUTE", "0")
 os.environ.setdefault("AI_DAILY_TOKEN_BUDGET", "0")
-# The same argument as with AI_ALLOW_PRIVATE_URLS: the test Jira addresses are
-# made-up hosts and localhost, and without the switch the address publicity check
-# (app/jira/netguard.py) would resolve them over the network on every test. The
-# check itself is tested separately, with the switch explicitly off.
-os.environ.setdefault("JIRA_ALLOW_PRIVATE_URLS", "true")
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -80,7 +75,13 @@ def engine():
             f"Исходная ошибка: {exc}"
         ) from exc
 
-    Base.metadata.drop_all(engine)
+    # The whole schema rather than Base.metadata.drop_all: that drops only the
+    # tables the models still describe. A table whose model has been removed
+    # stays behind in a test database left over from an earlier run, and its
+    # foreign keys then forbid dropping the tables it points at.
+    with engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
     Base.metadata.create_all(engine)
     yield engine
     engine.dispose()

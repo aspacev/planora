@@ -237,10 +237,80 @@ def _section(sheet: _Sheet, y: float, title: str, subtitle: str = "") -> float:
     return y - 20
 
 
+# --- rows across pages --------------------------------------------------------
+#
+# Neither the task table nor the chart used to continue onto a next page: rows
+# were drawn at an ever lower y, straight past the page edge. A project of sixty
+# tasks produced a document showing the first twenty-five, with no sign that
+# anything was missing. The rows are now dealt out into pages before anything is
+# drawn — `render` has to know the number of pages up front for "p. N of M".
+
+#: The lowest y a row may reach: the footer's rule and text live below it.
+_FLOOR = MARGIN + 14
+_TABLE_HEAD_H = 18.0
+_TABLE_ROW_H = 15.5
+#: The legend under a chart: a gap, a line of swatches, and air above the footer.
+_LEGEND_H = 34.0
+
+
+def _grouped_rows(doc: ExportDocument) -> list[tuple[object, list[DocTask]]]:
+    """The categories that have tasks, each with its tasks, in document order."""
+    return [
+        (category, tasks)
+        for category in doc.categories
+        if (tasks := doc.tasks_of(category.id))
+    ]
+
+
+def _deal(
+    groups: list[tuple[object, list[DocTask]]], first: int, rest: int
+) -> list[list[tuple[str, object]]]:
+    """Deals group headings and their rows out into pages of `first`, then `rest` rows.
+
+    A group that continues on the next page gets its heading repeated there: a
+    page read on its own must say which stage its rows belong to. A heading is
+    never left as the last row of a page with its rows overleaf.
+    """
+    pages: list[list[tuple[str, object]]] = [[]]
+    room = max(first, 2)
+    for heading, items in groups:
+        if room < 2:
+            pages.append([])
+            room = max(rest, 2)
+        pages[-1].append(("group", heading))
+        room -= 1
+        for item in items:
+            if room < 1:
+                pages.append([("group", heading)])
+                room = max(rest, 2) - 1
+            pages[-1].append(("row", item))
+            room -= 1
+    return pages
+
+
+def _table_pages(sheet: _Sheet) -> list[list[tuple[str, object]]]:
+    """The task table's rows by page. The first page also carries the header tiles."""
+    top = sheet.top()
+    # The same arithmetic as the drawing: _head ends 118 below the top, a
+    # section title takes 20, a continuation page starts 14 below the top.
+    first = int((top - 118 - 20 - _TABLE_HEAD_H - _FLOOR) // _TABLE_ROW_H)
+    rest = int((top - 14 - 20 - _TABLE_HEAD_H - _FLOOR) // _TABLE_ROW_H)
+    return _deal(_grouped_rows(sheet.doc), first, rest)
+
+
+def _chart_pages(sheet: _Sheet) -> list[list[tuple[str, object]]]:
+    """The chart's rows by page; every time slice is drawn once per such page."""
+    body_top = sheet.top() - 18 - 26 - HEAD_H
+    rows = int((body_top - _FLOOR - _LEGEND_H) // ROW_H)
+    return _deal(_grouped_rows(sheet.doc), rows, rows)
+
+
 # --- the table ----------------------------------------------------------------
 
 
-def _table(sheet: _Sheet, y: float, columns: list, rows: list, row_h: float = 15.5) -> float:
+def _table(
+    sheet: _Sheet, y: float, columns: list, rows: list, row_h: float = _TABLE_ROW_H
+) -> float:
     """A table with a header, alternating rows and group rows.
 
     columns — (heading, width, alignment, key). The key is either the value's
@@ -248,7 +318,7 @@ def _table(sheet: _Sheet, y: float, columns: list, rows: list, row_h: float = 15
     """
     c = sheet.canvas
     total_w = sum(col[1] for col in columns)
-    head_h = 18.0
+    head_h = _TABLE_HEAD_H
 
     c.setFillColor(theme.rl(theme.BG_SUBTLE))
     c.rect(MARGIN, y - head_h, total_w, head_h, stroke=0, fill=1)
@@ -292,12 +362,17 @@ def _table(sheet: _Sheet, y: float, columns: list, rows: list, row_h: float = 15
     return y
 
 
-def _tasks_page(sheet: _Sheet) -> None:
+def _tasks_page(sheet: _Sheet, page: list[tuple[str, object]], index: int, total: int) -> None:
+    """One page of the task table. The first also carries the document's header;
+    the following ones start with the section title and their number."""
     doc, t = sheet.doc, sheet.doc.labels
-    y = _head(sheet)
+    y = _head(sheet) if index == 0 else sheet.top() - 14
     if not doc.has(ExportSection.TASKS):
         return
-    y = _section(sheet, y, t("section", "tasks"), t("count", "tasks", n=len(doc.tasks)))
+    subtitle = t("count", "tasks", n=len(doc.tasks))
+    if total > 1:
+        subtitle += f"  ({index + 1}/{total})"
+    y = _section(sheet, y, t("section", "tasks"), subtitle)
 
     def status_cell(sh, task: DocTask, x, y, w):
         bg, fg = theme.STATUS_CHIP[task.status]
@@ -384,20 +459,16 @@ def _tasks_page(sheet: _Sheet) -> None:
     title, width, align, key = columns[1]
     columns[1] = (title, width + sheet.content_width - used, align, key)
 
-    rows: list = []
-    for category in doc.categories:
-        tasks = doc.tasks_of(category.id)
-        if not tasks:
-            continue
-        rows.append(("group", category.name))
-        rows += [("row", task) for task in tasks]
+    rows = [(kind, item.name if kind == "group" else item) for kind, item in page]
     _table(sheet, y, columns, rows)
 
 
 # --- the chart ----------------------------------------------------------------
 
 
-def _gantt_page(sheet: _Sheet, window: Window, index: int, total: int) -> None:
+def _gantt_page(
+    sheet: _Sheet, window: Window, rows: list[tuple[str, object]], index: int, total: int
+) -> None:
     c, doc, t = sheet.canvas, sheet.doc, sheet.doc.labels
     y = sheet.top() - 18
     _text(c, MARGIN, y - 10, doc.project_name, theme.FONT_BOLD, 13, theme.TEXT,
@@ -408,11 +479,13 @@ def _gantt_page(sheet: _Sheet, window: Window, index: int, total: int) -> None:
     _text(c, sheet.width - MARGIN, y - 10, caption, theme.FONT, 8.5, theme.TEXT_MUTED,
           align="r")
 
-    bottom = _gantt(sheet, window, y - 26)
+    bottom = _gantt(sheet, window, y - 26, rows)
     _legend(sheet, bottom - 20)
 
 
-def _gantt(sheet: _Sheet, window: Window, top: float) -> float:
+def _gantt(
+    sheet: _Sheet, window: Window, top: float, rows: list[tuple[str, object]]
+) -> float:
     c, doc, t = sheet.canvas, sheet.doc, sheet.doc.labels
     days = window.days
     chart_x = MARGIN + LABEL_W
@@ -434,14 +507,6 @@ def _gantt(sheet: _Sheet, window: Window, top: float) -> float:
 
     def x_of(day: date) -> float:
         return chart_x + (day - window.start).days * day_w
-
-    rows: list[tuple[str, object]] = []
-    for category in doc.categories:
-        tasks = doc.tasks_of(category.id)
-        if not tasks:
-            continue
-        rows.append(("category", category))
-        rows += [("task", task) for task in tasks]
 
     # --- the scale header ----------------------------------------------------
     c.setFillColor(theme.rl(theme.BG_SUBTLE))
@@ -489,7 +554,7 @@ def _gantt(sheet: _Sheet, window: Window, top: float) -> float:
         y = body_top - (i + 1) * ROW_H
         _rule(c, MARGIN, y, chart_x + chart_w, theme.ROW_LINE, 0.4)
 
-        if kind == "category":
+        if kind == "group":
             c.setFillColor(theme.rl(theme.BG_SUBTLE))
             c.rect(MARGIN, y, LABEL_W, ROW_H, stroke=0, fill=1)
             c.setFillColor(theme.rl(item.color.lstrip("#").upper()))
@@ -927,12 +992,22 @@ def render(doc: ExportDocument) -> bytes:
 
     pages: list = []
     if doc.has(ExportSection.OVERVIEW) or doc.has(ExportSection.TASKS):
-        pages.append(lambda: _tasks_page(sheet))
+        # Without the table there is one page — the header alone.
+        table = _table_pages(sheet) if doc.has(ExportSection.TASKS) else [[]]
+        for i, rows in enumerate(table):
+            pages.append(lambda r=rows, i=i: _tasks_page(sheet, r, i, len(table)))
     if doc.has(ExportSection.GANTT) and doc.tasks:
-        slices = doc.layout.slices
-        for i, window in enumerate(slices):
+        # Time runs across the pages and the rows run down them: each slice of
+        # time is repeated for every page of rows, so that a row keeps its place
+        # on the sheet while the reader leafs through the months.
+        chart = [
+            (window, rows)
+            for rows in _chart_pages(sheet)
+            for window in doc.layout.slices
+        ]
+        for i, (window, rows) in enumerate(chart):
             pages.append(
-                lambda w=window, i=i: _gantt_page(sheet, w, i, len(slices))
+                lambda w=window, r=rows, i=i: _gantt_page(sheet, w, r, i, len(chart))
             )
     if doc.proposal or doc.scorecard or doc.comments or doc.history:
         pages.append(lambda: _money_page(sheet))

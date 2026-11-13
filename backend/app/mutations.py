@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -820,6 +821,10 @@ def _snapshot_task_links(db: DbSession, task: Task) -> dict:
             "author_user_id": str(row.author_user_id) if row.author_user_id else None,
             "guest_name": row.guest_name,
             "body": row.body,
+            # Without the flag a restored remark comes back public: the column's
+            # default is "visible to the guest", and the team's aside would
+            # surface on the shared page after a delete and an undo.
+            "internal": row.internal,
             "created_at": row.created_at.isoformat(),
         }
         for row in db.scalars(
@@ -1029,6 +1034,12 @@ def _restore_task_links(db: DbSession, project: Project, task: Task, op: CreateT
                 author_user_id=author_id,
                 guest_name=row.get("guest_name"),
                 body=row["body"],
+                # Snapshots written before the flag was saved do not say which
+                # remarks were internal. A member's remark from such a snapshot
+                # is restored as internal: hiding a public reply from the guest
+                # is an inconvenience, publishing an aside is a leak. A guest's
+                # remark cannot be internal at all.
+                internal=row.get("internal", author_id is not None),
                 created_at=datetime.fromisoformat(row["created_at"]),
             )
         )
@@ -2031,10 +2042,41 @@ def last_undoable(db: DbSession, project: Project) -> Revision | None:
             Revision.project_id == project.id,
             Revision.undoes_seq.is_(None),
             Revision.seq.not_in(undone),
+            # Revisions made before the start date was last assigned hold dates
+            # of the previous axis (see Project.undo_floor_seq).
+            Revision.seq > project.undo_floor_seq,
         )
         .order_by(Revision.seq.desc())
         .limit(1)
     )
+
+
+def _refuse_outgrown_batch(db: DbSession, revisions: Sequence[Revision]) -> None:
+    """A batch whose categories have since received other people's work is not
+    rolled back.
+
+    Undoing `create_category` deletes the category together with its contents.
+    For the batch's own tasks that is the point; for a task a person added to
+    the category afterwards it is a loss with no way back — an undo is never
+    itself undoable — and the journal is left with a `create_task` on top whose
+    task no longer exists, so "Undo" answers `task_not_found` from then on. The
+    refusal leaves both the task and the batch in place: the person moves or
+    deletes their rows deliberately and repeats the rollback.
+    """
+    own_tasks = {
+        revision.op["task_id"] for revision in revisions if revision.op.get("type") == "create_task"
+    }
+    for revision in revisions:
+        if revision.op.get("type") != "create_category":
+            continue
+        residents = db.scalars(
+            select(Task.id).where(Task.category_id == uuid.UUID(revision.op["category_id"]))
+        )
+        if any(str(task_id) not in own_tasks for task_id in residents):
+            raise UndoConflict(
+                "batch_has_later_tasks",
+                "в категории пачки есть задачи, созданные не этой пачкой",
+            )
 
 
 def undo_batch(
@@ -2082,6 +2124,11 @@ def undo_batch(
 
     if not revisions:
         raise NotFoundInProject("batch_not_found", "пачка не найдена в этом проекте")
+    # A batch is rolled back whole or not at all: one whose revisions predate the
+    # last assignment of the start date holds dates of the previous axis.
+    if any(revision.seq <= project.undo_floor_seq for revision in revisions):
+        raise NotFoundInProject("nothing_to_undo", "пачка применена до смены даты старта")
+    _refuse_outgrown_batch(db, revisions)
 
     undo_batch_id = uuid.uuid4()
     return [

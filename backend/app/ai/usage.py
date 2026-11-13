@@ -73,5 +73,14 @@ class MeteredProvider:
 
     def generate(self, messages: list[dict], schema: dict) -> tuple[dict, int]:
         payload, tokens = self._inner.generate(messages, schema)
-        charge(self._db, self._org, tokens)
+        # In a transaction of its own: the tokens are spent at the provider
+        # whatever becomes of this request. An answer that fails our schema ends
+        # in a refusal, the request is rolled back — and written into the
+        # request's transaction, the charge would be rolled back with it: a model
+        # that keeps answering off-schema would burn the key with the budget
+        # never noticing. The request's own session is not committed instead:
+        # that would also commit a half-finished step of the interview.
+        with DbSession(self._db.get_bind()) as ledger:
+            charge(ledger, self._org, tokens)
+            ledger.commit()
         return payload, tokens

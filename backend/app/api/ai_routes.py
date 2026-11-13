@@ -10,6 +10,7 @@ from app.access import Action, can, parse_role
 from app.ai import intake, usage
 from app.ai.credentials import credential, provider_for, save_credential
 from app.ai.provider import LlmError, LlmProvider
+from app.api.deps import project_granted
 from app.auth import current_user
 from app.config import get_settings
 from app.db import get_db
@@ -36,6 +37,22 @@ def _admin(membership: Membership = Depends(current_membership)) -> Membership:
 
 def _writer(membership: Membership = Depends(current_membership)) -> Membership:
     if not can(parse_role(membership.role), Action.PROJECT_WRITE):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return membership
+
+
+def _creator(membership: Membership = Depends(current_membership)) -> Membership:
+    """Whoever may create a project — the interview ends in exactly that.
+
+    The same rule as POST /api/projects: a membership narrowed to particular
+    projects has no grant on a project that does not exist yet, so it creates
+    none. Asking for the role alone let a narrowed editor make projects through
+    the interview — around the narrowing — and read the organization's other
+    interviews along the way.
+    """
+    if not can(
+        parse_role(membership.role), Action.PROJECT_WRITE, scoped=membership.project_scoped
+    ):
         raise HTTPException(status_code=403, detail="forbidden")
     return membership
 
@@ -144,6 +161,11 @@ def _provider(db: DbSession, org: Organization) -> LlmProvider:
         window_seconds=60,
     ):
         raise HTTPException(status_code=429, detail="ai_rate_limited")
+    # Committed at once, as at sign-in: a model call that ends in a refusal
+    # raises, get_db rolls the request back, and the attempt would vanish with it
+    # — the limit would count successes only. Nothing else is in the transaction
+    # yet: every route asks for the provider before it writes anything.
+    db.commit()
     if not usage.budget_left(db, org):
         raise HTTPException(status_code=429, detail="ai_budget_exhausted")
     try:
@@ -180,7 +202,7 @@ class StartIn(BaseModel):
 @router.post("/sessions", status_code=201)
 def start_session(
     payload: StartIn, user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
@@ -197,7 +219,7 @@ def start_session(
 @router.get("/sessions/{session_id}")
 def read_session(
     session_id: uuid.UUID, user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
@@ -215,7 +237,7 @@ def answer_question(
     session_id: uuid.UUID,
     payload: AnswerIn,
     user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
@@ -232,7 +254,7 @@ def answer_question(
 @router.post("/sessions/{session_id}/summary")
 def build_summary(
     session_id: uuid.UUID, user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     """Gate 1: "here is what I understood about the project"."""
@@ -256,7 +278,7 @@ def edit_summary(
     session_id: uuid.UUID,
     payload: SummaryIn,
     user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
@@ -271,7 +293,7 @@ def edit_summary(
 @router.post("/sessions/{session_id}/draft")
 def build_draft(
     session_id: uuid.UUID, user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     """Gate 2, the main one: the draft. Nothing has been written into the project."""
@@ -300,7 +322,7 @@ def edit_draft(
     session_id: uuid.UUID,
     payload: DraftIn,
     user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
@@ -327,7 +349,7 @@ def apply_session(
     session_id: uuid.UUID,
     payload: ApplyIn,
     user: User = Depends(current_user),
-    membership: Membership = Depends(_writer),
+    membership: Membership = Depends(_creator),
     db: DbSession = Depends(get_db),
 ):
     """Step 4: applying as a batch of mutations with a shared batch_id."""
@@ -345,12 +367,27 @@ def apply_session(
 # --- a single, targeted action -----------------------------------------------
 
 
-def _own_task(db: DbSession, org: Organization, task_id: uuid.UUID) -> tuple[Project, Task]:
+def _own_task(
+    db: DbSession, membership: Membership, user: User, task_id: uuid.UUID
+) -> tuple[Project, Task]:
+    """A task this person may edit — or a 404, as for any project they cannot see.
+
+    The organization alone is not the boundary: a membership narrowed to
+    particular projects edits only those it was granted, and a task of any other
+    project must look to it exactly like a task that does not exist.
+    """
     task = db.get(Task, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task_not_found")
     project = db.get(Project, task.project_id)
-    if project is None or project.org_id != org.id:
+    if project is None or project.org_id != membership.org_id:
+        raise HTTPException(status_code=404, detail="task_not_found")
+    if not can(
+        parse_role(membership.role),
+        Action.PROJECT_WRITE,
+        project_granted=project_granted(db, project.id, user.id),
+        scoped=membership.project_scoped,
+    ):
         raise HTTPException(status_code=404, detail="task_not_found")
     return project, task
 
@@ -363,7 +400,7 @@ def propose_split(
 ):
     """A suggestion to split a task. Writes nothing: it is applied by a button."""
     org = db.get(Organization, membership.org_id)
-    _, task = _own_task(db, org, task_id)
+    _, task = _own_task(db, membership, user, task_id)
     try:
         parts = intake.propose_split(db, task, _provider(db, org), locale=user.locale)
     except LlmError as error:
@@ -386,7 +423,7 @@ def apply_split(
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
-    project, task = _own_task(db, org, task_id)
+    project, task = _own_task(db, membership, user, task_id)
     try:
         batch_id = intake.apply_split(db, project, task, payload.parts, actor=user)
     except LlmError as error:

@@ -59,7 +59,10 @@ Conventions used throughout, worth matching in new tables:
   (dates are real, anchored to `start_date`). `auto_schedule` toggles
   whether dependency edges push successor dates automatically
   (`app/cascade.py`) — off by default because turning it on changes the
-  meaning of every dependency in the project at once.
+  meaning of every dependency in the project at once. `undo_floor_seq` is the
+  last revision "Undo" no longer reaches: assigning or moving the start date
+  re-lays every task on a new axis outside the journal, and older inverses
+  hold dates of the old one.
 - **Category** — groups tasks for Gantt row grouping and color; has
   `position` for manual ordering.
 - **Task** — the core row. `status` (planned/in_progress/done/blocked),
@@ -79,6 +82,9 @@ Conventions used throughout, worth matching in new tables:
   for "who's waiting on this task" and for cleanup on delete.
 - **TaskAssignee** — join table, `(task_id, user_id)` unique.
 - **PlanVersion** — an approved-plan snapshot (JSONB), numbered per project.
+  Each row keeps `start_date` in the axis the promise was made in; after the
+  start date is assigned or moved it also carries `current_start`, the same
+  promise on today's axis (never returned by the API).
   Separate from `Task.baseline_*` because the baseline columns only hold the
   *latest* approval; the full "what did we promise in January vs. March"
   history needs every prior version.
@@ -192,22 +198,3 @@ handed over by the team, not downloaded by the client.
 - **AiSession** — an in-progress AI intake interview/draft, separate from
   `Project` because nothing is written to a real project until the human
   applies the draft.
-
-## Jira integration
-
-- **JiraConnection** — one per org (Basic auth: `base_url` + `email` +
-  `encrypted_token`, same never-decrypted-for-output rule as
-  `OrgLlmCredential`). See `integration-pattern.md`.
-- **JiraProjectLink** — one per Planora project; records the Jira project
-  key and the `jql` of the original import so re-sync asks Jira about the
-  same subset, not the whole instance.
-- **JiraCategoryLink** / **JiraTaskLink** — per-row sync bookkeeping keyed
-  by Jira's human-readable `issue_key`, linking a Jira epic/issue to the
-  `Category`/`Task` it was imported as. `JiraTaskLink.task_id` is
-  `SET NULL` (not `CASCADE`, unlike the rest of this module) so deleting a
-  task in Planora doesn't get silently resurrected by the next sync — the
-  orphaned link row is a tombstone that keeps the issue key from looking
-  "new" again. `JiraTaskLink.pushed_due_date` flips a single task's
-  dates from Jira-owned to Planora-owned once its due date has been pushed
-  back to Jira; `NULL` means Jira is still the source of truth for that
-  task's schedule.

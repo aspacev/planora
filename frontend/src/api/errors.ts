@@ -74,6 +74,8 @@ const PLAIN_CODES = new Set([
   // rarely — the button is usually already disabled by then — but it is exactly what
   // closes the race between a glance at the cache and the server's answer.
   "undo_conflict",
+  // Rolling the batch back would delete tasks added to its categories afterwards.
+  "batch_has_later_tasks",
   "batch_not_found",
   "slug_taken",
   "slug_empty",
@@ -170,21 +172,6 @@ const PLAIN_CODES = new Set([
   "metric_not_found",
   "week_in_future",
   "target_out_of_range",
-  // Jira. The same principle as with the LLM refusals: a third-party service's failure
-  // is not a breakage but a state a person is told about in words.
-  "jira_not_configured",
-  "jira_not_linked",
-  "jira_unreachable",
-  "jira_refused",
-  "jira_unauthorized",
-  "jira_not_found",
-  "jira_bad_json",
-  "jira_bad_shape",
-  "jira_key_unreadable",
-  "jira_token_required",
-  "jira_url_not_https",
-  "jira_url_invalid",
-  "jira_url_private",
 ]);
 
 /** The dictionary key the error is explained by. The raw code never gets out. */

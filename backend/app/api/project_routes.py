@@ -879,7 +879,12 @@ def list_plan_versions(
                 if version.approved_by in approvers
                 else None
             ),
-            "snapshot": version.snapshot,
+            # Without `current_start`: that is bookkeeping for restoring a version
+            # across a change of the start date, not part of the promise as made.
+            "snapshot": {
+                task_id: {k: v for k, v in promised.items() if k != "current_start"}
+                for task_id, promised in version.snapshot.items()
+            },
         }
         for version in versions
     ]

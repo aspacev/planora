@@ -203,6 +203,7 @@
     "offline": "Serverlə əlaqə yoxdur: dəyişiklik göndərilmədi",
     "nothing_to_undo": "Geri alınacaq bir şey yoxdur",
     "undo_conflict": "Layihə dəyişdi — geri alma səhv addımı götürərdi",
+    "batch_has_later_tasks": "Bu paketin bölmələrinə sonradan tapşırıqlar əlavə olunub — onları köçürün və ya silin, sonra geri almanı təkrarlayın",
     "batch_not_found": "Paket tapılmadı",
     "reason_required": "Bu sürüşmə üçün səbəb lazımdır",
     "slug_taken": "Bu ünvan artıq tutulub",
@@ -246,19 +247,6 @@
     "metric_not_found": "Belə metrika yoxdur",
     "week_in_future": "Bu həftə hələ başlamayıb",
     "target_out_of_range": "Hədəf mənfi ola bilməz",
-    "jira_not_configured": "Jira qoşulmayıb",
-    "jira_not_linked": "Bu layihə Jira-dan quraşdırılmayıb",
-    "jira_unreachable": "Jira əlçatan deyil",
-    "jira_refused": "Jira sorğunu rədd etdi",
-    "jira_unauthorized": "Jira giriş icazəsi vermədi — email və tokenu yoxlayın",
-    "jira_not_found": "Jira 404 ilə cavab verdi",
-    "jira_bad_json": "Jira-nın cavabını oxumaq olmadı",
-    "jira_bad_shape": "Jira-nın cavabında gözlənilən sahələr yoxdur",
-    "jira_key_unreadable": "Token açılmır: APP_SECRET dəyişib",
-    "jira_token_required": "İlk qoşulmada token lazımdır",
-    "jira_url_not_https": "Jira ünvanı https olmalıdır",
-    "jira_url_invalid": "Jira ünvanı düzgün deyil",
-    "jira_url_private": "Jira ünvanı ictimai host ilə həll olunmur",
     "proposal_nothing_to_push": "Köçürməyə heç nə yoxdur: seçilmiş işlər artıq plandadır və ya qiymətləndirilməyib",
     "proposal_value_out_of_range": "Yenidən hesablama icazə verilən hədlərə sığmır: qiymətləndirmə və ya dərəcələri azaldın",
     "export_empty_selection": "İxrac üçün ən azı bir bölmə seçin",
@@ -295,8 +283,7 @@
     "card": {
       "menu": "Layihə əməlləri"
     },
-    "delete_title": "«{name}» layihəsi silinsin?",
-    "create_from_jira": "Jira-dan idxal et"
+    "delete_title": "«{name}» layihəsi silinsin?"
   },
   "project": {
     "period": "{from} — {to}",
@@ -905,19 +892,6 @@
       "key_set": "Açar təyin edilib. Boş buraxsanız — dəyişmir",
       "key_missing": "Açar hələ yoxdur",
       "save": "Qoşulmanı saxla"
-    },
-    "jira": {
-      "title": "Jira",
-      "hint": "Sayt ünvanı, email və API-token — Jira layihələrini idxal etmək üçün",
-      "base_url": "Sayt ünvanı (base URL)",
-      "email": "Hesab e-poçtu",
-      "token": "API-token",
-      "token_missing": "Token hələ yoxdur",
-      "token_set": "Token təyin edilib. Boş buraxsanız — dəyişmir",
-      "save": "Qoşulmanı saxla",
-      "disconnect": "Ayır",
-      "disconnect_warning": "Layihələr Jira ilə sinxronlaşmağı dayandıracaq. Artıq idxal edilmiş tapşırıqlar yerində qalır.",
-      "disconnect_confirm": "Bəli, ayır"
     }
   },
   "ai": {
@@ -944,35 +918,6 @@
       "drop": "Sil",
       "project_name": "Layihənin adı",
       "apply": "Layihəyə tətbiq et"
-    }
-  },
-  "jira": {
-    "not_configured": "Jira qoşulmayıb: ünvan və token təşkilat ayarlarında göstərilir",
-    "import": {
-      "title": "Jira-dan idxal",
-      "back": "Layihələrə",
-      "loading_projects": "Jira layihələri yüklənir…",
-      "empty_projects": "Bu qoşulmada Jira layihəsi tapılmadı",
-      "project_label": "Jira layihəsi",
-      "project_placeholder": "Layihə seçin",
-      "name_label": "Planora-da layihənin adı",
-      "submit": "İdxal et",
-      "imported": "«{name}» layihəsi Jira-dan idxal edildi"
-    },
-    "sync": {
-      "title": "Jira",
-      "hint": "Layihə Jira-dan («{key}») quraşdırılıb: sinxronizasiya statusları, tarixləri yeniləyir və yeni tapşırıqları əlavə edir. Burada artıq gətirilmiş sətirlərə edilmiş dəyişikliklər sinxronizasiya zamanı üzərinə yazıla bilər.",
-      "never": "hələ sinxronizasiya olunmayıb",
-      "last_synced": "Son sinxronizasiya: {date}",
-      "button": "İndi sinxronizasiya et",
-      "result": "Hazırdır: yeni tapşırıq — {createdTasks}, yenilənib — {updatedTasks}"
-    },
-    "push": {
-      "hint": "Burada tarixini dəyişdiyiniz tapşırıqların son (bitmə) tarixini geri Jira-ya göndərir. Göndərilmiş tapşırıqların tarixinə sinxronizasiya artıq toxunmur.",
-      "button": "Jira-ya göndər",
-      "result": "Hazırdır: göndərildi — {pushed}, dəyişməz — {unchanged}",
-      "result_with_failures": "Hazırdır: göndərildi — {pushed}, dəyişməz — {unchanged}, Jira rədd etdi — {failed}",
-      "failures": "Jira bunlar üçün tarixi rədd etdi: {keys}"
     }
   },
   "proposal": {

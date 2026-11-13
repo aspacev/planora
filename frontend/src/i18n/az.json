@@ -203,6 +203,7 @@
     "offline": "Serverlə əlaqə yoxdur: dəyişiklik göndərilmədi",
     "nothing_to_undo": "Geri alınacaq bir şey yoxdur",
     "undo_conflict": "Layihə dəyişdi — geri alma səhv addımı götürərdi",
+    "batch_has_later_tasks": "Bu paketin bölmələrinə sonradan tapşırıqlar əlavə olunub — onları köçürün və ya silin, sonra geri almanı təkrarlayın",
     "batch_not_found": "Paket tapılmadı",
     "reason_required": "Bu sürüşmə üçün səbəb lazımdır",
     "slug_taken": "Bu ünvan artıq tutulub",

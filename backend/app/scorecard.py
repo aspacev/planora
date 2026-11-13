@@ -1970,11 +1970,47 @@ def patch_metric(
     db.flush()
 
 
+def _visible_details(
+    key: str, details: dict, *, include_team: bool, include_assessment: bool
+) -> dict:
+    """A metric's details in the form this reader is entitled to.
+
+    Only the team pace carries people: the per-person breakdown needs the pace
+    permission, and the signal with its reason — a judgement about a colleague —
+    needs the assessment one. The same two permissions trim the scorecard itself
+    (see _build_team); without this the drill-down handed the untrimmed details to
+    anyone who could open the project, a client included.
+    """
+    if key != "team_pace" or not details:
+        return details
+    if not include_team:
+        return {k: v for k, v in details.items() if k not in ("by_person", "unassigned")}
+    if include_assessment:
+        return details
+    hidden = ("signal", "reason")
+    trimmed = dict(details)
+    trimmed["by_person"] = [
+        {k: v for k, v in person.items() if k not in hidden}
+        for person in details.get("by_person", [])
+    ]
+    if details.get("unassigned"):
+        trimmed["unassigned"] = {
+            k: v for k, v in details["unassigned"].items() if k not in hidden
+        }
+    return trimmed
+
+
 def metric_tasks(
-    db: DbSession, project: Project, org: Organization, key: str, week: date | None
+    db: DbSession, project: Project, org: Organization, key: str, week: date | None,
+    *, include_team: bool = False, include_assessment: bool = False,
 ) -> dict:
     """A metric's drill-down for a week: past weeks come from the snapshot's
-    details (the chronicle), the current one is a live computation without a write."""
+    details (the chronicle), the current one is a live computation without a write.
+
+    `include_team` / `include_assessment` are the reader's permissions, the same
+    pair scorecard_state takes; both are closed by default.
+    """
+    seen = {"include_team": include_team, "include_assessment": include_assessment}
     if key not in _DEFS:
         raise ScorecardError("metric_not_found", f"неизвестная метрика: {key}")
     tz = project_tz(project, org)
@@ -1998,7 +2034,7 @@ def metric_tasks(
             "metric_key": key,
             "week_start": week_start.isoformat(),
             "value": float(value) if value is not None else None,
-            "details": details,
+            "details": _visible_details(key, details, **seen),
         }
 
     row = db.scalar(
@@ -2012,5 +2048,5 @@ def metric_tasks(
         "metric_key": key,
         "week_start": week_start.isoformat(),
         "value": float(row.value) if row is not None and row.value is not None else None,
-        "details": row.details if row is not None else {},
+        "details": _visible_details(key, (row.details or {}) if row is not None else {}, **seen),
     }

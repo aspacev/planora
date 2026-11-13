@@ -420,6 +420,12 @@ class Project(Base):
     auto_schedule: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )
+    # The last revision "Undo" no longer reaches. Raised to the head of the
+    # journal when the start date is assigned or moved (app.schedule): that lays
+    # the tasks out on a new axis outside the journal, and the inverse operations
+    # of earlier revisions still hold dates of the old one — undoing them would
+    # throw a task back to the relative epoch, the year 2001.
+    undo_floor_seq: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
 
 
 class ProjectAccess(Base):

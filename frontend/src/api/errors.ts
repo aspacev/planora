@@ -74,6 +74,8 @@ const PLAIN_CODES = new Set([
   // rarely — the button is usually already disabled by then — but it is exactly what
   // closes the race between a glance at the cache and the server's answer.
   "undo_conflict",
+  // Rolling the batch back would delete tasks added to its categories afterwards.
+  "batch_has_later_tasks",
   "batch_not_found",
   "slug_taken",
   "slug_empty",

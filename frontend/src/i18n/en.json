@@ -203,6 +203,7 @@
     "offline": "No connection to the server: the change was not sent",
     "nothing_to_undo": "There is nothing to undo",
     "undo_conflict": "The project has changed — undoing would take back the wrong step",
+    "batch_has_later_tasks": "Tasks were added to this batch's sections afterwards — move or delete them, then undo the batch again",
     "batch_not_found": "That batch was not found",
     "reason_required": "This shift needs a reason",
     "slug_taken": "That address is already taken",

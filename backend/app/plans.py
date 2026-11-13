@@ -147,7 +147,13 @@ def restore_plan_version(
             task.baseline_start = None
             task.baseline_duration = None
         else:
-            task.baseline_start = date.fromisoformat(promised["start_date"])
+            # `current_start` is the promise on today's axis: it appears when the
+            # start date is assigned or moved after the version was approved (see
+            # schedule.apply_schedule). `start_date` stays in the axis the promise
+            # was made in and is the answer only while that axis is still in force.
+            task.baseline_start = date.fromisoformat(
+                promised.get("current_start") or promised["start_date"]
+            )
             task.baseline_duration = promised["duration_days"]
 
     project.plan_version += 1

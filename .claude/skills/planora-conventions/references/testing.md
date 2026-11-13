@@ -20,7 +20,7 @@
 5. **The full suite is CI's job.** Run it locally (`--run --full`) only in the
    cases listed under "When the full suite is still required".
 
-Measured on a 4-core cloud container: backend 911 tests ≈ 2 min, frontend 791
+Measured on a 4-core cloud container: backend 924 tests ≈ 2 min, frontend 791
 tests ≈ 1.5 min, `tsc -b` ≈ 8 s, lint < 1 s. A typical feature change selects
 1–4 backend test files (seconds).
 
@@ -125,7 +125,7 @@ the network: LLM and Jira go through `RecordedProvider` /
 | AI, Jira | `test_ai_intake`, `test_jira_api`, `test_jira_mapping`, `test_jira_netguard` |
 | Mail, live | `test_mail`, `test_live_hub`, `test_live_api` |
 | Whole product | `test_end_to_end` (interview → approve → shift → public link) |
-| Remediation waves | `test_wave1_integrity`, `test_wave2_security`, `test_wave3_operations`, `test_wave4_api_design` — regression tests named after `docs/audit/remediation-plan.md` |
+| Remediation waves | `test_wave1_integrity`, `test_wave2_security`, `test_wave3_operations`, `test_wave4_api_design` — regression tests named after `docs/audit/remediation-plan.md`; `test_wave5_defect_scan` — regressions from the full code scan |
 | Repo guards | `test_openapi_contract` (routes vs. `openapi.json`), `test_migrations` (chain vs. models, both directions), `test_wave3_operations::test_vercel_requirements_match_uv_lock`, `test_config`, `test_rate_limit`, `test_text`, `test_health` |
 
 Guards that fail on an *unrelated-looking* edit — know them before they

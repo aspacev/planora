@@ -7,8 +7,8 @@ fact about each that you would otherwise have to open the file to learn. For
 tables see `data-model.md`; for tests see `testing.md`.
 
 Size, for calibration: backend `app/` ≈ 17k lines of Python in 75 files;
-`backend/tests/` ≈ 21k lines, 52 files, 911 tests; frontend `src/` has 75
-test files with 791 tests. One Alembic head, 27 migrations.
+`backend/tests/` ≈ 21k lines, 53 files, 924 tests; frontend `src/` has 75
+test files with 791 tests. One Alembic head, 28 migrations.
 
 ## What the product does (feature inventory)
 
@@ -81,7 +81,7 @@ test files with 791 tests. One Alembic head, 27 migrations.
 | `calendar.py` | `Calendar` (working-day mask + holidays), `end_date`, `count_working_days`. |
 | `settings_resolution.py` | Project setting or the organization default (`null` = inherit); `project_calendar`. |
 | `settings_input.py` | Shared validation of org and project settings payloads. |
-| `schedule.py` | Relative axis (`RELATIVE_EPOCH`, a Monday) and anchoring to a start date (`planned_schedule` preview, `apply_schedule`). |
+| `schedule.py` | Relative axis (`RELATIVE_EPOCH`, a Monday) and anchoring to a start date (`planned_schedule` preview, `apply_schedule`). Anchoring moves every task outside the journal, so it also raises `Project.undo_floor_seq` (earlier revisions stop being undoable) and writes `current_start` into every `PlanVersion` snapshot row (what `restore_plan_version` reads). |
 | `cascade.py` | Forward-only push of successors when `auto_schedule` is on. |
 | `critical.py` | Critical path by total float in working days. |
 | `plans.py` | `approve_plan`, `deviation_days`, plan versions, `restore_plan_version`. |
@@ -142,8 +142,8 @@ milestone → `a3f9c25e71b0` project auto_schedule → `d7e2b41c8f60` proposal �
 `c1d4a8f6e293` membership project_scoped → `f1a4c8d7b6e2` user
 last_active_at → `b4e7a2c9d3f1` scorecard → `342f2b35de69` jira →
 `12c30f757a97` jira push due date → `a1b2c3d4e5f6` scorecard signal cleanup →
-`c4d8e2f1a9b7` proposal status + plan links → **`d5e8f1a2b3c4` task risk
-(head)**. A new migration sets `down_revision` to the current head — confirm
+`c4d8e2f1a9b7` proposal status + plan links → `d5e8f1a2b3c4` task risk →
+**`e7a3c9b1d4f2` project undo floor (head)**. A new migration sets `down_revision` to the current head — confirm
 it with `uv run alembic heads` rather than trusting this list.
 
 ## Frontend — `frontend/src/`

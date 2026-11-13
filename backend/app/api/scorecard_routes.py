@@ -160,6 +160,8 @@ def get_scorecard_metric_tasks(
     """A metric drill-down: the week's tasks. Past weeks come from the snapshot,
     the current one is computed live without being written."""
     try:
-        return metric_tasks(db, context.project, context.org, metric_key, week)
+        return metric_tasks(
+            db, context.project, context.org, metric_key, week, **_visibility(context)
+        )
     except ScorecardError as error:
         raise _refuse(error)

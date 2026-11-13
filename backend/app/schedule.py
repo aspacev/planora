@@ -29,14 +29,15 @@ plus durations plus dependencies plus the working calendar, not the finish date.
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
 from app.calendar import Calendar, count_working_days, end_date, first_working_on_or_after
-from app.models import Organization, Project, ScheduleMode, Task
+from app.models import Organization, PlanVersion, Project, Revision, ScheduleMode, Task
 from app.settings_resolution import project_calendar, resolve_working_days
 
 #: The beginning of the relative axis. A Monday — so that "Day 1" opens "Week 1"
@@ -99,6 +100,10 @@ class SchedulePlan:
     starts: dict[uuid.UUID, date]
     #: The new baseline starts — only for tasks that have a baseline plan.
     baseline_starts: dict[uuid.UUID, date]
+    #: How any date of the old axis lands on the new one; None when the tasks
+    #: stay where they are. Applying needs it for the dates that live outside
+    #: the task rows — the snapshots of earlier plan versions.
+    carry: Callable[[date], date] | None = None
 
 
 def _project_tasks(db: DbSession, project: Project) -> list[Task]:
@@ -125,7 +130,7 @@ def _shifted_dates(
     has no offset in working days, and its relative position to the project's
     beginning must not be lost.
     """
-    calendar_delta = (new_anchor - old_anchor).days
+    calendar_delta = new_anchor - old_anchor
 
     def carried(coordinate: date) -> date:
         if coordinate < old_anchor:
@@ -146,6 +151,7 @@ def _shifted_dates(
         end_date=max(ends) if ends else None,
         starts=starts,
         baseline_starts=baseline_starts,
+        carry=carried,
     )
 
 
@@ -217,6 +223,30 @@ def planned_schedule(
     )
 
 
+def _carry_plan_versions(
+    db: DbSession, project: Project, carry: Callable[[date], date]
+) -> None:
+    """Writes every earlier promise's start on the new axis next to the original.
+
+    `current_start` is carried from its own previous value when there is one: a
+    project anchored twice has left two axes behind, and the original
+    `start_date` belongs to the first of them.
+    """
+    versions = db.scalars(select(PlanVersion).where(PlanVersion.project_id == project.id))
+    for version in versions:
+        # A new dict rather than an edit in place: SQLAlchemy does not see
+        # changes inside a JSONB value and would not write them.
+        version.snapshot = {
+            task_id: {
+                **promised,
+                "current_start": carry(
+                    date.fromisoformat(promised.get("current_start") or promised["start_date"])
+                ).isoformat(),
+            }
+            for task_id, promised in version.snapshot.items()
+        }
+
+
 def apply_schedule(
     db: DbSession,
     project: Project,
@@ -240,13 +270,18 @@ def apply_schedule(
     an already calendar-based project again. For a relative project there is no
     choice — without a recomputation its coordinates would stay in 2001.
 
-    Snapshots of earlier plan versions (PlanVersion.snapshot) are left as they
-    were: they are a chronicle of promises in the axis they were made in.
+    Snapshots of earlier plan versions (PlanVersion.snapshot) keep their
+    `start_date` as it was: they are a chronicle of promises in the axis they were
+    made in. Next to it each row gets `current_start` — the same promise on the new
+    axis: restoring a version reads that one (see plans.restore_plan_version),
+    otherwise a promise made in relative days would become a baseline in 2001.
 
     It does not go through the revision journal — like edits to the settings: this
     is a change of the frame of reference rather than an edit of the plan, and an
     entry saying "every task was moved" is not something the journal could undo
-    with one button.
+    with one button. For the same reason the revisions made so far stop being
+    undoable (Project.undo_floor_seq): their inverse operations hold dates of the
+    axis that has just been left.
     """
     plan = planned_schedule(
         db, project, org, start=start, working_days=working_days, shift_tasks=shift_tasks
@@ -256,11 +291,24 @@ def apply_schedule(
         project.working_days = working_days
 
     if project.schedule_mode == ScheduleMode.RELATIVE or shift_tasks:
+        moved = False
         for task in _project_tasks(db, project):
+            moved = moved or task.start_date != plan.starts[task.id]
             task.start_date = plan.starts[task.id]
             moved_baseline = plan.baseline_starts.get(task.id)
             if moved_baseline is not None:
                 task.baseline_start = moved_baseline
+        if plan.carry is not None:
+            _carry_plan_versions(db, project, plan.carry)
+        # Only when a date really changed: re-saving the same start moves
+        # nothing, and sealing the undo history for it would be a loss for nothing.
+        if moved or project.schedule_mode == ScheduleMode.RELATIVE:
+            project.undo_floor_seq = (
+                db.scalar(
+                    select(func.max(Revision.seq)).where(Revision.project_id == project.id)
+                )
+                or 0
+            )
 
     project.start_date = start
     project.schedule_mode = ScheduleMode.CALENDAR

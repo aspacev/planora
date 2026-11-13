@@ -10,7 +10,8 @@ import { Modal } from "./Modal";
 import { useToast } from "./toast";
 
 /**
- * Two ways to create a project — the ordinary one and through an interview — as one pair of buttons.
+ * The ways to create a project — the ordinary one, through an interview and from a requirements
+ * document — as one group of buttons.
  *
  * A separate component rather than markup inside a screen: the pair lives in the projects list's
  * header and will outlive the next screen that begins with the same "and what if there is no project
@@ -58,6 +59,11 @@ export function CreateProjectActions() {
           a second way to do the same thing rather than a footnote under it. */}
       <Link to="/projects/new/ai" className="button-link">
         {t("projects.create_with_ai")}
+      </Link>
+      {/* The third way: the order already has a document, and retelling it in a chat is long and
+          loses requirements. */}
+      <Link to="/projects/new/document" className="button-link">
+        {t("projects.create_from_document")}
       </Link>
 
       {open && (

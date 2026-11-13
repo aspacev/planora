@@ -18,6 +18,7 @@ import { ConfirmAction } from "../components/ConfirmAction";
 import { Switch } from "../components/Switch";
 import { useLocale } from "../i18n/LocaleProvider";
 import { SharePanel } from "../project/SharePanel";
+import { SourceDocument } from "../project/SourceDocument";
 import { useDeleteProject } from "../project/useDeleteProject";
 import {
   DateListField,
@@ -272,6 +273,11 @@ export function ProjectSettings() {
           save={saves.at("project-workdays")}
           onCommit={(workdays_extra) => saves.commit("project-workdays", { workdays_extra })}
         />
+
+        {/* The document the project was made from. Not behind `readOnly`: a viewer
+            reads it too, and whoever may not is simply answered "nothing here" by
+            the server — the block then shows nothing. */}
+        <SourceDocument projectId={projectId} />
 
         {/* The public link comes as the last block: it is not a computation
             setting but a decision to show the project outside. */}

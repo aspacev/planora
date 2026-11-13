@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session as DbSession
 
@@ -14,9 +14,18 @@ from app.api.deps import project_granted
 from app.auth import current_user
 from app.config import get_settings
 from app.db import get_db
-from app.models import AiSession, Membership, Organization, Project, Task, User
+from app.models import (
+    AiSession,
+    Membership,
+    Organization,
+    Project,
+    ProjectDocument,
+    ProjectType,
+    Task,
+    User,
+)
 from app.orgs import current_membership
-from app import throttle
+from app import documents, throttle
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -174,11 +183,35 @@ def _provider(db: DbSession, org: Organization) -> LlmProvider:
         raise _refuse(error)
 
 
-def _out(session: AiSession) -> dict:
+def _document_out(db: DbSession, session: AiSession) -> dict | None:
+    """What the screen needs to know about the session's document — its name
+    and how far the reading has gone. Never the file or its text."""
+    if session.document_id is None:
+        return None
+    document = db.get(ProjectDocument, session.document_id)
+    if document is None:
+        return None
+    return {
+        "filename": document.filename,
+        "size_bytes": document.size_bytes,
+        "parts_read": session.document_cursor,
+        "parts_total": intake.parts_total(db, session),
+    }
+
+
+def _out(db: DbSession, session: AiSession) -> dict:
     return {
         "id": str(session.id),
         "status": session.status,
         "locale": session.locale,
+        "project_type": session.project_type,
+        "document": _document_out(db, session),
+        "brief": session.brief,
+        "requirements": session.requirements,
+        "document_topics": session.document_topics,
+        # Counted by the server on every reading, so it follows every edit of
+        # the draft (see intake.uncovered_requirements).
+        "uncovered_requirements": intake.uncovered_requirements(session),
         "transcript": session.transcript,
         "summary": session.summary,
         "draft": session.draft,
@@ -197,6 +230,9 @@ class StartIn(BaseModel):
     #: switched the interface mid-conversation would get a draft in two
     #: languages at once.
     locale: str | None = None
+    #: The kind of project selects the interview's topics. Omitted means the
+    #: list every interview used before types existed.
+    project_type: ProjectType = ProjectType.GENERAL
 
 
 @router.post("/sessions", status_code=201)
@@ -209,11 +245,174 @@ def start_session(
     provider = _provider(db, org)
     try:
         session = intake.start(
-            db, org=org, user=user, locale=payload.locale or user.locale, provider=provider
+            db,
+            org=org,
+            user=user,
+            locale=payload.locale or user.locale,
+            provider=provider,
+            project_type=payload.project_type,
         )
     except LlmError as error:
         raise _refuse(error)
-    return _out(session)
+    return _out(db, session)
+
+
+# --- starting from a document ------------------------------------------------
+
+
+@router.post("/documents", status_code=201)
+def upload_document(
+    # The request's body is the file itself rather than a form with a file in
+    # it: parsing multipart forms takes a dependency the application does not
+    # otherwise need, and a single file has nothing to gain from a form.
+    data: bytes = Body(b"", media_type="application/octet-stream"),
+    filename: str = Query("", max_length=255),
+    locale: str | None = Query(None, max_length=5),
+    user: User = Depends(current_user),
+    membership: Membership = Depends(_creator),
+    db: DbSession = Depends(get_db),
+):
+    """Accepts a requirements document and opens a session that will read it.
+
+    Every refusal comes before the model is called and before anything is
+    stored: an unconfigured connection, a file of the wrong kind, a document
+    that will not fit into what is left of today's token budget. The model is
+    not called here at all — the reading goes part by part in later requests.
+    """
+    org = db.get(Organization, membership.org_id)
+    if credential(db, org) is None:
+        raise HTTPException(status_code=409, detail="llm_not_configured")
+
+    try:
+        extracted = documents.extract(data, filename)
+    except documents.DocumentError as error:
+        # 413 for the size — the same status the middleware gives a body that
+        # declared its length; everything else is "this file cannot be worked
+        # with", a 422.
+        status = 413 if error.code == "document_too_large" else 422
+        raise HTTPException(status_code=status, detail=error.code)
+
+    if not usage.fits(db, org, documents.estimate_tokens(len(extracted.text))):
+        raise HTTPException(status_code=429, detail="ai_budget_exhausted")
+
+    documents.sweep_abandoned(db, org)
+    document = documents.store(
+        db, org=org, user=user, filename=filename, data=data, extracted=extracted
+    )
+    session = intake.start_from_document(
+        db, org=org, user=user, locale=locale or user.locale, document=document
+    )
+    return _out(db, session)
+
+
+@router.post("/sessions/{session_id}/document/parts")
+def read_document_part(
+    session_id: uuid.UUID,
+    user: User = Depends(current_user),
+    membership: Membership = Depends(_creator),
+    db: DbSession = Depends(get_db),
+):
+    """Reads the next part of the document: one request — one model call.
+
+    The page calls this until the status leaves "reading". A refusal (the
+    per-minute limit, a model failure) leaves the cursor where it was, and the
+    same request continues from the same part.
+    """
+    org = db.get(Organization, membership.org_id)
+    session = _session(db, org, session_id)
+    try:
+        intake.read_part(db, session, _provider(db, org))
+    except intake.IntakeError as error:
+        raise HTTPException(status_code=409, detail=error.code)
+    except LlmError as error:
+        raise _refuse(error)
+    return _out(db, session)
+
+
+class RequirementIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    section: str = ""
+    text: str
+
+
+class RequirementsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_type: ProjectType
+    requirements: list[RequirementIn]
+
+
+@router.put("/sessions/{session_id}/requirements")
+def edit_requirements(
+    session_id: uuid.UUID,
+    payload: RequirementsIn,
+    user: User = Depends(current_user),
+    membership: Membership = Depends(_creator),
+    db: DbSession = Depends(get_db),
+):
+    """A person's edit of the requirements and of the project type."""
+    org = db.get(Organization, membership.org_id)
+    session = _session(db, org, session_id)
+    try:
+        intake.edit_requirements(
+            db,
+            session,
+            [requirement.model_dump() for requirement in payload.requirements],
+            payload.project_type.value,
+        )
+    except intake.IntakeError as error:
+        raise HTTPException(status_code=409, detail=error.code)
+    except LlmError as error:
+        # Validated by the same schema as the model's answer — see edit_draft.
+        raise HTTPException(status_code=422, detail=error.code)
+    return _out(db, session)
+
+
+@router.post("/sessions/{session_id}/requirements/confirm")
+def confirm_requirements(
+    session_id: uuid.UUID,
+    user: User = Depends(current_user),
+    membership: Membership = Depends(_creator),
+    db: DbSession = Depends(get_db),
+):
+    """The requirements gate: the type and the list are confirmed, the model
+    marks which interview topics the document already answers."""
+    org = db.get(Organization, membership.org_id)
+    session = _session(db, org, session_id)
+    try:
+        intake.confirm_requirements(db, session, _provider(db, org))
+    except intake.IntakeError as error:
+        raise HTTPException(status_code=409, detail=error.code)
+    except LlmError as error:
+        raise _refuse(error)
+    return _out(db, session)
+
+
+@router.post("/sessions/{session_id}/questions")
+def next_question(
+    session_id: uuid.UUID,
+    user: User = Depends(current_user),
+    membership: Membership = Depends(_creator),
+    db: DbSession = Depends(get_db),
+):
+    """The first question after the requirements gate — if there is one to ask.
+
+    A session with no open question and nothing left to find out comes back
+    unchanged: the page reads that as "the interview is skipped" and goes on to
+    the summary. The provider is reached for only when a question will really
+    be asked.
+    """
+    org = db.get(Organization, membership.org_id)
+    session = _session(db, org, session_id)
+    try:
+        if intake.needs_question(session):
+            intake.ask(db, session, _provider(db, org))
+    except intake.IntakeError as error:
+        raise HTTPException(status_code=409, detail=error.code)
+    except LlmError as error:
+        raise _refuse(error)
+    return _out(db, session)
 
 
 @router.get("/sessions/{session_id}")
@@ -223,7 +422,7 @@ def read_session(
     db: DbSession = Depends(get_db),
 ):
     org = db.get(Organization, membership.org_id)
-    return _out(_session(db, org, session_id))
+    return _out(db, _session(db, org, session_id))
 
 
 class AnswerIn(BaseModel):
@@ -248,7 +447,7 @@ def answer_question(
         raise HTTPException(status_code=409, detail=error.code)
     except LlmError as error:
         raise _refuse(error)
-    return _out(session)
+    return _out(db, session)
 
 
 @router.post("/sessions/{session_id}/summary")
@@ -264,7 +463,7 @@ def build_summary(
         intake.make_summary(db, session, _provider(db, org))
     except LlmError as error:
         raise _refuse(error)
-    return _out(session)
+    return _out(db, session)
 
 
 class SummaryIn(BaseModel):
@@ -287,7 +486,7 @@ def edit_summary(
         intake.edit_summary(db, session, payload.theses)
     except intake.IntakeError as error:
         raise HTTPException(status_code=409, detail=error.code)
-    return _out(session)
+    return _out(db, session)
 
 
 @router.post("/sessions/{session_id}/draft")
@@ -308,7 +507,7 @@ def build_draft(
         # everything established are still there, and the same request can be
         # repeated.
         raise _refuse(error)
-    return _out(session)
+    return _out(db, session)
 
 
 class DraftIn(BaseModel):
@@ -335,7 +534,7 @@ def edit_draft(
         # A person's edit is validated by the schema just like the model's
         # answer: otherwise a draft spoiled by hand would make it to being applied.
         raise HTTPException(status_code=422, detail=error.code)
-    return _out(session)
+    return _out(db, session)
 
 
 class ApplyIn(BaseModel):
@@ -361,7 +560,7 @@ def apply_session(
         raise HTTPException(status_code=409, detail=error.code)
     except LlmError as error:
         raise HTTPException(status_code=422, detail=error.code)
-    return {"project_id": str(project.id), "batch_id": str(batch_id), "session": _out(session)}
+    return {"project_id": str(project.id), "batch_id": str(batch_id), "session": _out(db, session)}
 
 
 # --- a single, targeted action -----------------------------------------------

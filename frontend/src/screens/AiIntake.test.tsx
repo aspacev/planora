@@ -19,6 +19,12 @@ const SESSION = {
   id: "s1",
   status: "interview" as const,
   locale: "ru",
+  project_type: "general" as const,
+  document: null,
+  brief: "",
+  requirements: [],
+  document_topics: [],
+  uncovered_requirements: [],
   transcript: [{ question: "Какой результат считается успехом?", answer: null, covered: [] }],
   summary: [] as string[],
   draft: {},
@@ -46,8 +52,12 @@ const DRAFT_STATE = {
   },
 };
 
+/** The project types the interviews were started with, in order. */
+const started: string[] = [];
+
 function aiFixtures(configured = true) {
   const calls: string[] = [];
+  started.length = 0;
   server.use(
     http.get("/api/ai/credential", () =>
       HttpResponse.json({
@@ -57,8 +67,10 @@ function aiFixtures(configured = true) {
         configured,
       }),
     ),
-    http.post("/api/ai/sessions", () => {
+    http.post("/api/ai/sessions", async ({ request }) => {
+      const { project_type } = (await request.json()) as { project_type: string };
       calls.push("start");
+      started.push(project_type);
       return HttpResponse.json(SESSION, { status: 201 });
     }),
     http.post("/api/ai/sessions/s1/answers", () => {
@@ -123,6 +135,34 @@ describe("интервью", () => {
     await userEvent.click(screen.getByRole("button", { name: "Ответить" }));
 
     await waitFor(() => expect(calls).toEqual(["start", "answer"]));
+  });
+
+  it("тип проекта выбирается до первого вопроса и уходит на сервер", async () => {
+    aiFixtures();
+    renderApp({ route: "/projects/new/ai" });
+
+    // "Other" by default: the list of topics every interview used before types existed.
+    const type = await screen.findByLabelText("Тип проекта");
+    expect(type).toHaveValue("general");
+    await userEvent.selectOptions(type, "Маркетинговое мероприятие");
+    await userEvent.click(screen.getByRole("button", { name: "Начать интервью" }));
+
+    await screen.findByText("Какой результат считается успехом?");
+    expect(started).toEqual(["event"]);
+    // The type is the interview's premise: once the questions go, it is no longer offered.
+    expect(screen.queryByLabelText("Тип проекта")).toBeNull();
+  });
+
+  it("без документа в черновике нет ни ссылок на ТЗ, ни блока «Не вошло в план»", async () => {
+    aiFixtures();
+    renderApp({ route: "/projects/new/ai" });
+    await userEvent.click(await screen.findByRole("button", { name: "Начать интервью" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Хватит, генерируй" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Сгенерировать план" }));
+
+    await screen.findByText("Черновик плана");
+    expect(screen.queryByText(/По ТЗ/)).toBeNull();
+    expect(screen.queryByText("Не вошло в план")).toBeNull();
   });
 
   it("«хватит, генерируй» доступно на любом шаге", async () => {

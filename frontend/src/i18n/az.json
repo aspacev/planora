@@ -259,7 +259,15 @@
     "unknown_risk": "Naməlum risk bayrağı",
     "unknown_operation": "Naməlum əməliyyat",
     "revision_not_found": "Bu dəyişiklik layihənin tarixçəsində yoxdur",
-    "plan_version_not_found": "Plan versiyası tapılmadı"
+    "plan_version_not_found": "Plan versiyası tapılmadı",
+    "document_too_large": "Fayl 4 MB-dan böyükdür",
+    "document_type_unsupported": "Bu format dəstəklənmir: PDF, DOCX, TXT və ya MD lazımdır",
+    "document_unreadable": "Faylı oxumaq mümkün olmadı: o zədələnib və ya parolla qorunur",
+    "document_no_text": "Faylda mətn yoxdur. Sənədlərin skanları və şəkilləri oxunmur",
+    "document_too_long": "Sənəddə mətn həddən artıqdır — 300 000 işarədən çox",
+    "document_not_found": "Layihənin ilkin sənədi yoxdur",
+    "requirements_empty": "Siyahıda heç bir tələb yoxdur",
+    "invalid_project_type": "Belə layihə növü yoxdur"
   },
   "live": {
     "offline": "Serverlə əlaqə yoxdur. Redaktə mümkün deyil",
@@ -283,7 +291,8 @@
     "card": {
       "menu": "Layihə əməlləri"
     },
-    "delete_title": "«{name}» layihəsi silinsin?"
+    "delete_title": "«{name}» layihəsi silinsin?",
+    "create_from_document": "TŞ-dən yarat"
   },
   "project": {
     "period": "{from} — {to}",
@@ -874,7 +883,17 @@
       "delete": "Layihəni sil",
       "delete_warning": "Layihə bütövlükdə silinəcək — kateqoriyalar, tapşırıqlar və bütün tarixçə ilə birlikdə. Bunu geri qaytarmaq mümkün olmayacaq",
       "delete_confirm": "Bəli, layihəni sil",
-      "deleted": "«{name}» layihəsi silindi"
+      "deleted": "«{name}» layihəsi silindi",
+      "document": {
+        "title": "İlkin sənəd",
+        "uploaded": "Yüklənib: {date}",
+        "uploaded_by": "Yüklənib: {date} · {name}",
+        "download": "Yüklə",
+        "delete": "Sənədi sil",
+        "delete_warning": "Fayl və onun mətni həmişəlik silinəcək. Tapşırıqlar və onların təsvirlərindəki bənd istinadları qalacaq",
+        "delete_confirm": "Bəli, sənədi sil",
+        "deleted": "Sənəd silindi"
+      }
     },
     "profile": {
       "title": "Profil",
@@ -917,7 +936,41 @@
       "task_duration": "«{name}» müddəti",
       "drop": "Sil",
       "project_name": "Layihənin adı",
-      "apply": "Layihəyə tətbiq et"
+      "apply": "Layihəyə tətbiq et",
+      "source": "TŞ üzrə: {clauses}",
+      "uncovered": {
+        "title": "Plana daxil olmayıb",
+        "hint": "Sənəddəki heç bir tapşırığın istinad etmədiyi tələblər"
+      }
+    },
+    "type": {
+      "label": "Layihənin növü",
+      "software": "Proqram təminatının hazırlanması",
+      "event": "Marketinq tədbiri",
+      "general": "Digər"
+    },
+    "document": {
+      "title": "TŞ-dən yeni layihə",
+      "intro": "Texniki şərti, brifi və ya müqaviləni yükləyin. Sistem sənədi oxuyacaq, yalnız orada olmayanları soruşacaq və plan təklif edəcək. «Tətbiq et» düyməsini basana qədər layihəyə heç nə yazılmır",
+      "file": "Sənəd faylı",
+      "formats": "PDF, DOCX, TXT və ya MD, 4 MB-a qədər. Skanlar oxunmur: faylda mətn olmalıdır",
+      "privacy": "Sənəd təşkilatınızın qoşduğu modelə göndəriləcək",
+      "upload": "Yüklə və oxu",
+      "uploading": "Yüklənir…",
+      "reading": "Sənəd oxunur… {read} / {total}",
+      "reading_hint": "Böyük sənəd onlarla saniyə çəkir. Vərəqi bağlaya bilərsiniz: oxunuş eyni yerdən davam edəcək",
+      "resume": "Davam et",
+      "preparing": "Suallar hazırlanır…"
+    },
+    "requirements": {
+      "title": "Sənəddən nə başa düşdük",
+      "list": "Tələblər",
+      "hint": "Artıq olanı silin, ifadələri düzəldin, buraxılanı əlavə edin. Plan sənədin mətninə görə deyil, bu siyahıya görə qurulur",
+      "section": "{number} nömrəli tələbin bölməsi",
+      "text": "{number} nömrəli tələbin mətni",
+      "drop": "{number} nömrəli tələbi sil",
+      "add": "Tələb əlavə et",
+      "next": "Davam et"
     }
   },
   "proposal": {

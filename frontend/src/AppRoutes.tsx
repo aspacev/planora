@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "./auth/RequireAuth";
 import { Admin } from "./screens/Admin";
 import { AiIntake } from "./screens/AiIntake";
+import { DocumentIntake } from "./screens/DocumentIntake";
 import { ForgotPassword } from "./screens/ForgotPassword";
 import { Invite } from "./screens/Invite";
 import { Login } from "./screens/Login";
@@ -60,6 +61,10 @@ export function AppRoutes() {
         {/* The interview is available only when creating a new project: launching
             it inside an existing one is the next stage, not the first version. */}
         <Route path="/projects/new/ai" element={<AiIntake />} />
+        {/* The same intake, started from a requirements document. The session's number
+            rides in the address (?session=…): reading a long document takes a while,
+            and a closed tab must come back to the step it was closed on. */}
+        <Route path="/projects/new/document" element={<DocumentIntake />} />
         <Route path="/projects/:projectId" element={<Project />} />
         {/* The proposal is a tab of the same screen with an address of its own, by
             the same rule as the history: a quote is discussed in conversations, and

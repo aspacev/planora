@@ -34,6 +34,14 @@ test files with 781 tests. One Alembic head, 29 migrations.
 - **Exports**: XLSX and PDF of the project; proposal PDF.
 - **AI intake**: an LLM interview → summary → draft plan → applied as one
   undoable batch; also "split this task". Bring-your-own key per organization.
+  The interview's topics depend on the project type (software / event /
+  general).
+- **Intake from a document** ("Create from a brief"): upload a PDF / DOCX /
+  TXT / MD → the model reads it part by part into a list of requirements →
+  a person confirms the project type and the list → questions only on topics
+  the document leaves open → the same summary / draft / apply. Every draft
+  task carries the requirements it comes from; the document is kept with the
+  project (download; owner may delete).
 - **Live updates** over WebSocket (Docker only), with an offline lock.
 - **Accounts**: registration, login, email verification, password reset,
   invitations, multiple organizations per user, roles owner / editor /
@@ -63,7 +71,7 @@ test files with 781 tests. One Alembic head, 29 migrations.
 | File | What it is |
 |---|---|
 | `auth.py` | `register`, `authenticate`, sessions (`open_session`, `session_for_token`, idle/absolute expiry, `close_other_sessions`), `current_user` dependency. |
-| `access.py` | `Action` enum and the literal `Role → frozenset[Action]` matrix; `can`/`require`; `needs_project_grant`; `visible_op` strips `internal_note` from journal entries for roles without `READ_INTERNAL_NOTE`. Actions: `PROJECT_READ/WRITE/ADMIN/DELETE/EXPORT`, `ORG_ADMIN`, `COMMENT`, `READ_INTERNAL_NOTE`, `PLAN_APPROVE`, `PLAN_REAPPROVE`, `PROPOSAL_READ`, `TEAM_ASSESSMENT_READ`, `TEAM_PACE_READ`. |
+| `access.py` | `Action` enum and the literal `Role → frozenset[Action]` matrix; `can`/`require`; `needs_project_grant`; `visible_op` strips `internal_note` from journal entries for roles without `READ_INTERNAL_NOTE`. Actions: `PROJECT_READ/WRITE/ADMIN/DELETE/EXPORT`, `ORG_ADMIN`, `COMMENT`, `READ_INTERNAL_NOTE`, `PLAN_APPROVE`, `PLAN_REAPPROVE`, `PROPOSAL_READ`, `TEAM_ASSESSMENT_READ`, `TEAM_PACE_READ`, `DOCUMENT_READ`, `DOCUMENT_DELETE`. |
 | `director.py` | `is_director()` — install-wide role from `DIRECTOR_EMAIL`. |
 | `orgs.py` | Active membership of a session, `switch`, role changes, last-owner protection (`LastOwner`). |
 | `invitations.py` | Issue / reissue / revoke / accept; `InvitationError` codes; project grants on accept. |
@@ -95,7 +103,8 @@ test files with 781 tests. One Alembic head, 29 migrations.
 | `proposals.py` | Quote sections/items, stages, `build_from_plan`, `push_preview`, `push_to_plan` (through mutations, one batch), role/rate suggestions. |
 | `scorecard.py` | Metrics `overdue_tasks`, `finish_drift`, `scope_growth`, `date_shifts`, `close_rate`, `stale_in_progress`, `data_quality`, `team_pace`; ISO weeks in the project timezone; lazy weekly commit on GET; alerts; drill-down tasks. No scheduler anywhere. |
 | `export/` | `document.py` builds one localized, permission-trimmed snapshot read by both renderers; `xlsx.py` (openpyxl); `pdf.py` (reportlab canvas, vector Gantt); `proposal_pdf.py` (client document); `budget.py` page/zoom budget (mirrored by `frontend/src/export/pageBudget.ts`); `labels.py` + `labels/{az,en,ru}.json`; `theme.py` colours copied from the frontend CSS; `fonts/` Inter. |
-| `ai/` | `credentials.py`, `provider.py` (`LlmProvider` protocol, `HttpProvider`, `RecordedProvider`), `netguard.py` (SSRF), `schemas.py` (model output validation), `intake.py` (interview → summary → draft → apply; split task), `usage.py` (daily token budget, `MeteredProvider`). Topics come from `config/intake_topics.yml`. |
+| `ai/` | `credentials.py`, `provider.py` (`LlmProvider` protocol, `HttpProvider`, `RecordedProvider`), `netguard.py` (SSRF), `schemas.py` (model output validation), `intake.py` (document path: `start_from_document` → `read_part` → `edit_requirements` / `confirm_requirements`; then interview → summary → draft → apply for both paths; `uncovered_requirements`; split task), `usage.py` (daily token budget, `fits` for a pre-flight estimate, `MeteredProvider`). Topics come from `config/intake_topics.yml`, one list per `ProjectType`. |
+| `documents.py` | The requirements document, model-free: `extract` (format by content: PDF via pypdf, DOCX via zipfile + ElementTree with headings kept, TXT/MD as UTF-8; refusals `document_too_large` / `_type_unsupported` / `_unreadable` / `_no_text` / `_too_long`), `split_parts` (deterministic ≈40 000-char parts), `estimate_tokens`, `store`, `sweep_abandoned` (30 days, run on each upload), `project_document`. |
 
 ### HTTP layer — `backend/app/api/`
 
@@ -118,7 +127,8 @@ the public page (two visibility flags, one assembly).
 | `share_routes.py` | `/api/projects/{id}/share` | GET, POST (issue), `rotate`, PATCH (comments on/off), DELETE. |
 | `public_routes.py` | `/api/public/{org_slug}/{project_slug}` | State, comments, counts, guest comment, `export.xlsx/pdf`. No session; every refusal is 404 `link_not_found`. |
 | `live_routes.py` | `/api/projects/{id}/live` | WebSocket; Origin-checked handshake; per-socket visibility of notes. |
-| `ai_routes.py` | `/api/ai` | `credential`, `sessions` and their `answers` / `summary` / `draft` / `apply`, `tasks/{id}/split` (+ `/apply`). |
+| `ai_routes.py` | `/api/ai` | `credential`, `sessions` (POST takes `project_type`) and their `answers` / `summary` / `draft` / `apply`, `tasks/{id}/split` (+ `/apply`). Document path: `POST documents` (raw file body, `?filename=&locale=`; own body ceiling in `main.py`), `sessions/{id}/document/parts`, `sessions/{id}/requirements` (PUT) + `/confirm`, `sessions/{id}/questions`. |
+| `document_routes.py` | `/api/projects/{id}/document` | `GET` (metadata + `can_delete`), `GET /file` (download), `DELETE` (owner). |
 | `admin_routes.py` | `/api/admin/users` | Director only. |
 
 `backend/openapi.json` is the committed snapshot of `app.openapi()`;
@@ -157,7 +167,8 @@ its component.
 Public: `/register`, `/login`, `/forgot-password`, `/reset-password`,
 `/verify-email`, `/invite/:token`, `/p/:orgSlug/:projectSlug` (public page).
 Behind `RequireAuth`: `/` → `/projects`; `/projects`; `/my-tasks`;
-`/projects/new/ai`; `/projects/:projectId` and its tabs
+`/projects/new/ai`; `/projects/new/document` (`?session=` resumes);
+`/projects/:projectId` and its tabs
 `/proposal`, `/scorecard`, `/history`; `/projects/:projectId/settings`;
 `/settings` with `organization`, `members`, `profile`; `/admin`. Legacy
 `/members`, `/portfolio`, `/reports` redirect.
@@ -166,11 +177,12 @@ Behind `RequireAuth`: `/` → `/projects`; `/projects`; `/my-tasks`;
 
 | Folder | Contents |
 |---|---|
-| `api/` | `client.ts`: `request<T>()`, `requestFile()`, `ApiError { code, status, hints }` (hints from `X-Shift-*` headers), `saveFile`. One wrapper per resource: `auth`, `org`, `projects`, `revisions`, `comments`, `proposal`, `scorecard`, `share`, `public`, `export`, `invitations`, `ai`, `admin`, `config`. `errors.ts` = explicit list of error codes that have a translation. `schema.d.ts` generated. |
+| `api/` | `client.ts`: `request<T>()`, `requestFile()`, `ApiError { code, status, hints }` (hints from `X-Shift-*` headers), `saveFile`. One wrapper per resource: `auth`, `org`, `projects`, `revisions`, `comments`, `proposal`, `scorecard`, `share`, `public`, `export`, `invitations`, `ai`, `documents`, `admin`, `config`. `errors.ts` = explicit list of error codes that have a translation. `schema.d.ts` generated. |
 | `auth/` | `AuthProvider` (three states: checking / signed in / anonymous), `RequireAuth`, `afterAuth` (where to land), `invite` (pending-invite handoff), `permissions.ts` (`roleCanWrite`, `roleCanReadProposal`, `useCanWrite`, `useOrgRole` — mirrors the server matrix for *showing* controls only), `verificationNotice`. |
-| `screens/` | One file per route: `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `VerifyEmail`, `Invite`, `Projects`, `MyTasks`, `Project` (tabs: chart / proposal / scorecard / history), `ProjectSettings`, `PublicProject`, `Settings` (+ `OrgSettings`, `Members`, `Profile`), `Admin`, `AiIntake`; `ShareDialog`, `CategoryForm`; `projectStates.ts` (list + per-project state queries shared by Projects and My tasks). |
+| `screens/` | One file per route: `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `VerifyEmail`, `Invite`, `Projects`, `MyTasks`, `Project` (tabs: chart / proposal / scorecard / history), `ProjectSettings`, `PublicProject`, `Settings` (+ `OrgSettings`, `Members`, `Profile`), `Admin`, `AiIntake`, `DocumentIntake`; `ShareDialog`, `CategoryForm`; `projectStates.ts` (list + per-project state queries shared by Projects and My tasks). |
 | `gantt/` | The hand-built chart. Pure math: `scale.ts` (zoom levels, `DAY_WIDTH`), `timescale.ts` (ISO-string dates ↔ pixels, no `Date` objects), `relative.ts` (Day N axis), `columns.ts` (pinned table columns), `motion.ts`, `edgeScroll.ts`. Components: `Gantt`, `Grid`, `Header`, `Row`, `Cells`, `Arrows` (dependency elbows), `BarTip`, `NewTaskRow`, `RowMenu`, `AssignMenu`, `ViewControls`, `BottomActions`, `UndoMove`. Hooks: `useDragDates`, `useDragCategory`, `useLinkDrag`, `useReorder`, `useBarMotion`, `useGanttView`, `useViewportFit`, `useLaneWidth`, `useQuickTask`, `useQuickCategory`, `useTruncatedTitle`, `scalePreference`. |
-| `project/` | Everything around the chart: `useProjectMutation` (the single optimistic write path: snapshot → show → send → roll back or refetch; handles `reason_required`), `optimistic.ts` (state transforms, no calendar math), `useUndo`, `UndoHotkey`, `baseline.ts` (deviation rule mirrored from the server), `ShiftReason`, `PlanApproval`, `PlanChangesPanel` + `planChanges.ts`, `PlanSummary` + `summary.ts`, `progress.ts` (duration-weighted readiness), `verdict.ts` (overdue vs. past-deadline), `ProjectHead`, `ProjectBar`, `ProjectHistory`, `DependencyNudge`, `StartDateDialog`, `SharePanel`, `ShareControls`, `categoryColors`, `useDeleteProject`. |
+| `project/` | Everything around the chart: `useProjectMutation` (the single optimistic write path: snapshot → show → send → roll back or refetch; handles `reason_required`), `optimistic.ts` (state transforms, no calendar math), `useUndo`, `UndoHotkey`, `baseline.ts` (deviation rule mirrored from the server), `ShiftReason`, `PlanApproval`, `PlanChangesPanel` + `planChanges.ts`, `PlanSummary` + `summary.ts`, `progress.ts` (duration-weighted readiness), `verdict.ts` (overdue vs. past-deadline), `ProjectHead`, `ProjectBar`, `ProjectHistory`, `DependencyNudge`, `StartDateDialog`, `SharePanel`, `ShareControls`, `SourceDocument` (the settings block for the project's requirements document), `categoryColors`, `useDeleteProject`. |
+| `intake/` | What both AI intakes share: `IntakeSteps` (questions → summary gate → draft gate, with requirement references and the "Not in the plan" block), `ProjectTypeField`. |
 | `task/` | `TaskPanel` (the task card: fields, dependencies, tabs), `Comments`, `History`, `TaskProgress`, `formatEvent.ts` (journal entry → localized phrase), `fields`, `PanelSection`. |
 | `proposal/` | `Proposal` screen, table, stepper, params, summary, notes, task panel, push-to-plan dialog and button, `money.ts`. |
 | `scorecard/` | `Scorecard.tsx` (incl. the SVG `Sparkline`), `scorecard.css`. |
@@ -199,7 +211,7 @@ the browser; every plan write through `useProjectMutation`.
 | `Caddyfile` | TLS, security headers, `/api/*` → api, everything else → `index.html`. |
 | `backend/Dockerfile`, `frontend/Dockerfile` | Images; the web image's context is the repo root (it needs `Caddyfile`). |
 | `api/index.py`, `vercel.json`, `requirements.txt` | Vercel layout. `requirements.txt` pins must equal `backend/uv.lock` (tested). |
-| `config/intake_topics.yml` | Required AI interview topics. |
+| `config/intake_topics.yml` | Required AI interview topics, one list per project type (`types: software / event / general`). |
 | `.env.example` | Every setting with comments; the placeholders for `APP_SECRET` and `DIRECTOR_EMAIL` are rejected at startup. |
 | `.github/workflows/ci.yml` | The three CI jobs. |
 | `README.md`, `README.ru.md` | Product overview (EN) and the full operations guide (RU). |

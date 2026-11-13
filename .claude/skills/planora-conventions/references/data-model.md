@@ -197,4 +197,24 @@ handed over by the team, not downloaded by the client.
   `integration-pattern.md`.
 - **AiSession** — an in-progress AI intake interview/draft, separate from
   `Project` because nothing is written to a real project until the human
-  applies the draft.
+  applies the draft. `status` walks `reading` → `requirements` (document
+  path only) → `interview` → `summary` → `draft` → `applied`.
+  `project_type` (`ProjectType`: software / event / general) selects the
+  interview topics. The document path adds `document_id` (SET NULL),
+  `document_cursor` (parts read so far), `requirements`
+  (`[{id, section, text}]` — from the second step on the model sees this
+  list, never the document's text), `brief`, `document_topics` (topics the
+  document already answers). Draft tasks carry `requirement_ids`; "not in
+  the plan" is computed from them on every read, never stored.
+- **ProjectDocument** (`project_documents`) — the uploaded requirements file
+  and its extracted text, stored in the database (no disk on Vercel).
+  `content` and `extracted_text` are `deferred` — load them explicitly.
+  `project_id` is NULL until the draft is applied, then unique (one document
+  per project) and `ON DELETE CASCADE`. Undoing the apply batch removes the
+  tasks, not the document. Access: `Action.DOCUMENT_READ`
+  (owner/editor/viewer), `Action.DOCUMENT_DELETE` (owner); never client or
+  guest. Unapplied uploads older than 30 days are swept on the next upload
+  in the same org (`documents.sweep_abandoned`).
+- **Project.project_type** — the type the intake was run with; NULL for a
+  project created by hand. Stored, not shown anywhere yet. CHECK derived
+  from `PROJECT_TYPES`.

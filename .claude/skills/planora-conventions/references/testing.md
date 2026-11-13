@@ -121,7 +121,7 @@ the network: the LLM goes through `RecordedProvider`, mail through `mailbox` or 
 | Proposal | `test_proposal_api`, `test_proposal_money` |
 | Scorecard | `test_scorecard` |
 | Export | `test_export_api` (opens the real XLSX/PDF with openpyxl/pypdf) |
-| AI | `test_ai_intake` |
+| AI | `test_ai_intake` (interview, gates, apply, split, credential), `test_document_intake` (extraction and refusals, part-by-part reading, requirements gate, topic coverage, references and "not in the plan", upload limits and budget, document permissions, sweep) |
 | Mail, live | `test_mail`, `test_live_hub`, `test_live_api` |
 | Whole product | `test_end_to_end` (interview → approve → shift → public link) |
 | Remediation waves | `test_wave1_integrity`, `test_wave2_security`, `test_wave3_operations`, `test_wave4_api_design` — regression tests named after `docs/audit/remediation-plan.md`; `test_wave5_defect_scan` — regressions from the full code scan |

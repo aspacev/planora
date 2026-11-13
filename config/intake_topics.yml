@@ -1,25 +1,81 @@
-# Mandatory interview topics.
+# Mandatory interview topics, per project type.
 #
 # A config file next to the application rather than a table in the database:
 # whoever deploys will edit it, not the end user. Moving it into organization
 # settings is for when there is demand for industry-specific intake templates.
 #
+# The types are the members of ProjectType (backend/app/models.py). A document
+# for software and a brief for an event leave different things unsaid, so each
+# type asks about its own list. `general` is the list every interview used
+# before types existed.
+#
 # key    — machine key of the topic; the model marks covered topics by it;
 # prompt — a hint to the model about what to ask, in the development language.
 #          The model phrases the question for a human itself, in the session's
 #          language.
-topics:
-  - key: goal
-    prompt: Цель проекта — какой результат считается успехом
-  - key: scope
-    prompt: Объём работ — что именно предстоит сделать
-  - key: deadline
-    prompt: Сроки и целевая дата
-  - key: people
-    prompt: Кто участвует и кто за что отвечает
-  - key: constraints
-    prompt: Ограничения — бюджет, технологии, согласования, зависимости от других
-  - key: done
-    prompt: Что уже готово или начато
-  - key: out_of_scope
-    prompt: Что в проект точно не входит
+types:
+  software:
+    - key: goal
+      prompt: Какой результат считается успехом
+    - key: users
+      prompt: Кто пользователи и сколько их
+    - key: platforms
+      prompt: Платформы — веб, мобильные приложения, десктоп; какие браузеры и устройства
+    - key: scope
+      prompt: Состав функций
+    - key: integrations
+      prompt: С какими системами нужен обмен данными
+    - key: data
+      prompt: Перенос существующих данных и их объёмы
+    - key: non_functional
+      prompt: Нагрузка, безопасность, доступность, языки интерфейса
+    - key: team
+      prompt: Кто в команде и в каких ролях
+    - key: breakdown
+      prompt: Делить план по этапам (анализ, дизайн, разработка, тесты) или по модулям системы
+    - key: acceptance
+      prompt: Как принимается работа и кто принимает
+    - key: deadline
+      prompt: Сроки и вехи
+    - key: constraints
+      prompt: Ограничения — бюджет, технологии, согласования
+    - key: out_of_scope
+      prompt: Что в проект точно не входит
+  event:
+    - key: goal
+      prompt: Цель мероприятия и как измерить успех
+    - key: audience
+      prompt: Кто приглашён и сколько человек
+    - key: date_venue
+      prompt: Дата, площадка, формат (офлайн, онлайн, смешанный)
+    - key: program
+      prompt: Программа и спикеры
+    - key: promotion
+      prompt: Каналы продвижения
+    - key: contractors
+      prompt: Подрядчики — площадка, кейтеринг, техника, полиграфия
+    - key: budget
+      prompt: Бюджет и кто согласует расходы
+    - key: team
+      prompt: Кто за что отвечает
+    - key: approvals
+      prompt: Что и с кем нужно согласовать, к каким датам
+    - key: after
+      prompt: Что делается после мероприятия — отчёт, рассылка, материалы
+    - key: out_of_scope
+      prompt: Что в мероприятие точно не входит
+  general:
+    - key: goal
+      prompt: Цель проекта — какой результат считается успехом
+    - key: scope
+      prompt: Объём работ — что именно предстоит сделать
+    - key: deadline
+      prompt: Сроки и целевая дата
+    - key: people
+      prompt: Кто участвует и кто за что отвечает
+    - key: constraints
+      prompt: Ограничения — бюджет, технологии, согласования, зависимости от других
+    - key: done
+      prompt: Что уже готово или начато
+    - key: out_of_scope
+      prompt: Что в проект точно не входит

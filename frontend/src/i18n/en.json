@@ -259,7 +259,15 @@
     "unknown_risk": "Unknown risk flag",
     "unknown_operation": "Unknown operation",
     "revision_not_found": "This change is not in the project history",
-    "plan_version_not_found": "Plan version not found"
+    "plan_version_not_found": "Plan version not found",
+    "document_too_large": "The file is larger than 4 MB",
+    "document_type_unsupported": "This format is not supported: PDF, DOCX, TXT or MD is needed",
+    "document_unreadable": "The file could not be read: it is damaged or password-protected",
+    "document_no_text": "There is no text in the file. Scans and photos of documents are not read",
+    "document_too_long": "The document has too much text — more than 300,000 characters",
+    "document_not_found": "The project has no source document",
+    "requirements_empty": "The list has no requirements",
+    "invalid_project_type": "There is no such project type"
   },
   "live": {
     "offline": "No connection to the server. Editing is unavailable",
@@ -283,7 +291,8 @@
     "card": {
       "menu": "Project actions"
     },
-    "delete_title": "Delete the “{name}” project?"
+    "delete_title": "Delete the “{name}” project?",
+    "create_from_document": "Create from a brief"
   },
   "project": {
     "period": "{from} — {to}",
@@ -874,7 +883,17 @@
       "delete": "Delete project",
       "delete_warning": "The project will be deleted entirely — categories, tasks and all of its history. This cannot be undone",
       "delete_confirm": "Yes, delete the project",
-      "deleted": "Project “{name}” deleted"
+      "deleted": "Project “{name}” deleted",
+      "document": {
+        "title": "Source document",
+        "uploaded": "Uploaded {date}",
+        "uploaded_by": "Uploaded {date} · {name}",
+        "download": "Download",
+        "delete": "Delete the document",
+        "delete_warning": "The file and its text will be deleted for good. The tasks and the clause references in their descriptions will stay",
+        "delete_confirm": "Yes, delete the document",
+        "deleted": "The document has been deleted"
+      }
     },
     "profile": {
       "title": "Profile",
@@ -917,7 +936,41 @@
       "task_duration": "Duration of “{name}”",
       "drop": "Remove",
       "project_name": "Project name",
-      "apply": "Apply to a project"
+      "apply": "Apply to a project",
+      "source": "Per the requirements: {clauses}",
+      "uncovered": {
+        "title": "Not in the plan",
+        "hint": "Requirements from the document that no task refers to"
+      }
+    },
+    "type": {
+      "label": "Project type",
+      "software": "Software development",
+      "event": "Marketing event",
+      "general": "Other"
+    },
+    "document": {
+      "title": "New project from a requirements document",
+      "intro": "Upload a requirements specification, a brief or a contract. The system reads the document, asks only about what it does not say, and proposes a plan. Nothing is written into a project until you press “Apply”",
+      "file": "Document file",
+      "formats": "PDF, DOCX, TXT or MD, up to 4 MB. Scans are not read: the file must contain text",
+      "privacy": "The document will be sent to the model your organization has connected",
+      "upload": "Upload and read",
+      "uploading": "Uploading…",
+      "reading": "Reading the document… {read} of {total}",
+      "reading_hint": "A large document takes tens of seconds. You can close the tab: the reading continues from the same place",
+      "resume": "Continue",
+      "preparing": "Preparing the questions…"
+    },
+    "requirements": {
+      "title": "What we understood from the document",
+      "list": "Requirements",
+      "hint": "Delete what is not needed, fix the wording, add what was missed. The plan is built from this list, not from the document’s text",
+      "section": "Section of requirement {number}",
+      "text": "Text of requirement {number}",
+      "drop": "Delete requirement {number}",
+      "add": "Add a requirement",
+      "next": "Continue"
     }
   },
   "proposal": {

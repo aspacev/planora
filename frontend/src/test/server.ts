@@ -16,6 +16,9 @@ import { setupServer } from "msw/node";
  * An empty answer means "nothing has been discussed anywhere yet": that is where every project
  * begins, and in that state there is not a single number on the strip's rows.
  *
+ * The source document is asked for by the project's settings screen. No document: that is every
+ * project made by hand, and the block then shows nothing.
+ *
  * The install's settings are asked for by the application's frame — the "address not confirmed"
  * strip. Mail is enabled: this is an ordinary install, and a test about address confirmation must
  * not start by declaring a mail server.
@@ -34,4 +37,7 @@ export const server = setupServer(
   http.get("/api/org/list", () => HttpResponse.json([])),
   http.get("/api/projects/:projectId/comments/counts", () => HttpResponse.json({})),
   http.get("/api/public/:orgSlug/:projectSlug/comments/counts", () => HttpResponse.json({})),
+  http.get("/api/projects/:projectId/document", () =>
+    HttpResponse.json({ detail: "document_not_found" }, { status: 404 }),
+  ),
 );

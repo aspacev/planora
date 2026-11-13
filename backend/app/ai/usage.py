@@ -43,6 +43,19 @@ def budget_left(db: DbSession, org: Organization) -> bool:
     return spent_today(db, org) < budget
 
 
+def fits(db: DbSession, org: Organization, tokens: int) -> bool:
+    """Whether a piece of work estimated at `tokens` fits into what is left today.
+
+    Asked before a long reading starts: budget_left answers "is there anything
+    left", and with a little left a hundred-page document would be half read
+    before the fuse blew — the money spent and nothing to show for it.
+    """
+    budget = get_settings().ai_daily_token_budget
+    if budget <= 0:
+        return True
+    return spent_today(db, org) + tokens <= budget
+
+
 def charge(db: DbSession, org: Organization, tokens: int) -> None:
     """Records consumption. An upsert rather than read-modify-write: two
     concurrent model calls must not lose each other's tokens."""

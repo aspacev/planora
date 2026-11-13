@@ -70,6 +70,7 @@ from app.api import (
     admin_routes,
     ai_routes,
     auth_routes,
+    document_routes,
     export_routes,
     invite_routes,
     live_routes,
@@ -81,6 +82,11 @@ from app.api import (
     scorecard_routes,
     share_routes,
 )
+
+#: Where a requirements document is uploaded (app/api/ai_routes.py). Named here
+#: because the body-size middleware treats this one address differently.
+DOCUMENT_UPLOAD_PATH = "/api/ai/documents"
+
 
 def refuse_a_multi_worker_start() -> None:
     """The live feed lives in the process's memory — there must be exactly one worker.
@@ -170,8 +176,16 @@ async def reject_oversized_bodies(request: Request, call_next):
     header closes the cheap path without claiming to be airtight.
     """
     length = request.headers.get("content-length")
-    if length and length.isdigit() and int(length) > get_settings().max_body_bytes:
-        return JSONResponse(status_code=413, content={"detail": "body_too_large"})
+    settings = get_settings()
+    # The one address whose body is a file rather than JSON has a ceiling of its
+    # own — and a refusal of its own: "the document is too large" is something a
+    # person can act on, "the body is too large" is not.
+    if request.method == "POST" and request.url.path == DOCUMENT_UPLOAD_PATH:
+        ceiling, refusal = settings.max_document_bytes, "document_too_large"
+    else:
+        ceiling, refusal = settings.max_body_bytes, "body_too_large"
+    if length and length.isdigit() and int(length) > ceiling:
+        return JSONResponse(status_code=413, content={"detail": refusal})
     return await call_next(request)
 
 
@@ -227,6 +241,7 @@ app.include_router(share_routes.router)
 app.include_router(public_routes.router)
 app.include_router(live_routes.router)
 app.include_router(ai_routes.router)
+app.include_router(document_routes.router)
 app.include_router(admin_routes.router)
 
 

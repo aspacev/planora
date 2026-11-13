@@ -11,7 +11,9 @@ flow, webhook receiver, API-key-based service) — load the `planora-conventions
 skill. It's the architecture map for this repo (data model, the
 mutation/revision engine, the permissions matrix, the existing AI/Jira
 integration pattern to copy for any new integration, dev-workflow commands)
-and is much cheaper than re-deriving any of this by exploring the tree.
+and is much cheaper than re-deriving any of this by exploring the tree. Its
+`references/codebase-map.md` describes every module, route and folder — read
+that instead of scanning the code to learn what the app does.
 
 ## Stack and layout
 
@@ -67,6 +69,19 @@ cp .env.example .env && docker compose build
 
 `.github/workflows/ci.yml` is the authoritative source for these commands —
 README duplicates them for humans but CI is ground truth.
+
+**Those are the full suites (≈2 min backend, ≈1.5 min frontend) — do not run
+them by default.** CI runs them on every pull request, so a fresh branch needs
+no baseline run, and a change needs only the tests it can reach:
+
+```bash
+.claude/skills/planora-conventions/scripts/test-env.sh              # once per session
+.claude/skills/planora-conventions/scripts/affected_tests.py --run  # only what the diff affects
+```
+
+Docs-only changes run nothing; backend-only changes skip the frontend and
+vice versa. When the full suite is still required, and what a skipped run
+does not guarantee: `.claude/skills/planora-conventions/references/testing.md`.
 
 ## House habits
 

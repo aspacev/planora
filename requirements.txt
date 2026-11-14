@@ -28,3 +28,6 @@ et-xmlfile==2.0.0
 reportlab==5.0.1
 pillow==12.3.0
 charset-normalizer==3.5.1
+# Reading an uploaded specification in PDF for the AI intake. Pure Python, no
+# transitive dependencies on the Python version the function runs on.
+pypdf==6.16.2

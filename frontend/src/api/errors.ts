@@ -149,6 +149,13 @@ const PLAIN_CODES = new Set([
   // false promise.
   "ai_rate_limited",
   "ai_budget_exhausted",
+  // An uploaded specification. Four refusals with four different remedies: save it in
+  // another format, repair the file, paste the text by hand, shorten it.
+  "spec_unsupported_format",
+  "spec_unreadable",
+  "spec_empty",
+  "spec_too_long",
+  "body_too_large",
   // A project has one public link: a repeat "share" is not a breakage but an answer of
   // "there already is one".
   "share_link_exists",

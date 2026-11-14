@@ -945,6 +945,24 @@
         "title": "JoinedOut",
         "type": "object"
       },
+      "LimitsOut": {
+        "properties": {
+          "spec_max_bytes": {
+            "title": "Spec Max Bytes",
+            "type": "integer"
+          },
+          "spec_max_chars": {
+            "title": "Spec Max Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "spec_max_bytes",
+          "spec_max_chars"
+        ],
+        "title": "LimitsOut",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -2747,6 +2765,24 @@
         "title": "ShareOut",
         "type": "object"
       },
+      "SpecTextOut": {
+        "properties": {
+          "chars": {
+            "title": "Chars",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "chars"
+        ],
+        "title": "SpecTextOut",
+        "type": "object"
+      },
       "SplitIn": {
         "additionalProperties": false,
         "properties": {
@@ -2778,6 +2814,12 @@
               }
             ],
             "title": "Locale"
+          },
+          "spec": {
+            "default": "",
+            "maxLength": 1000000,
+            "title": "Spec",
+            "type": "string"
           }
         },
         "title": "StartIn",
@@ -3116,6 +3158,56 @@
           }
         },
         "summary": "Write Credential",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/limits": {
+      "get": {
+        "description": "The ceilings of a specification — so that the screen refuses a file before sending it.",
+        "operationId": "read_limits_api_ai_limits_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Limits",
         "tags": [
           "ai"
         ]
@@ -3611,6 +3703,79 @@
           }
         },
         "summary": "Edit Summary",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/spec/extract": {
+      "post": {
+        "description": "A specification file turned into text. The model is not called and nothing is stored.\n\nThe text goes back to the screen rather than straight into a session:\nextraction is lossy, and the person has to see what the model will be given.\n\nThe body is the file itself rather than a multipart form: one file needs no\nform, and a form would need a parser the application does not otherwise have.",
+        "operationId": "extract_spec_api_ai_spec_extract_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Filename",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "title": "Data",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecTextOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extract Spec",
         "tags": [
           "ai"
         ]

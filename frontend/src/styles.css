@@ -1923,6 +1923,15 @@ input[type="checkbox"] {
   letter-spacing: -0.01em;
 }
 
+/* Starting from a specification is the second way in, below the first: a rule
+   and a gap separate it from the interview button so the two do not read as one
+   form. */
+.ai__spec {
+  margin-top: var(--space-32);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--border);
+}
+
 /* The draft checked against the summary. A quiet panel above the tasks: it is
    read once, before the rows, and must not compete with them afterwards. */
 .ai__trace {

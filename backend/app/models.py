@@ -916,6 +916,10 @@ class AiSession(Base):
     # would get a draft half in one language and half in another.
     locale: Mapped[str] = mapped_column(String(5), default="az")
     status: Mapped[str] = mapped_column(String(16), default="interview")
+    # The text of an uploaded specification, empty when the session started as
+    # a plain interview. Empty rather than NULL: "is there a specification" then
+    # has one negative answer instead of two.
+    spec: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
     transcript: Mapped[list] = mapped_column(JSONB, default=list)
     summary: Mapped[list] = mapped_column(JSONB, default=list)
     draft: Mapped[dict] = mapped_column(JSONB, default=dict)

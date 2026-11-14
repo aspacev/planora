@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session as DbSession
 
@@ -10,6 +10,7 @@ from app.access import Action, can, parse_role
 from app.ai import intake, usage
 from app.ai.credentials import credential, provider_for, save_credential
 from app.ai.provider import LlmError, LlmProvider
+from app.ai.spec import UPLOAD_PATH, SpecError, extract
 from app.auth import current_user
 from app.config import get_settings
 from app.db import get_db
@@ -158,6 +159,10 @@ def _out(session: AiSession) -> dict:
         "id": str(session.id),
         "status": session.status,
         "locale": session.locale,
+        # The length, not the text: the specification is tens of kilobytes, and
+        # it would ride in every response of the session for the sake of a
+        # screen that only needs to know one was given.
+        "spec_chars": len(session.spec),
         "transcript": session.transcript,
         "summary": session.summary,
         "draft": session.draft,
@@ -179,6 +184,66 @@ class StartIn(BaseModel):
     #: switched the interface mid-conversation would get a draft in two
     #: languages at once.
     locale: str | None = None
+    #: The text of a specification to start from — pasted, or extracted from a
+    #: file by the upload route and shown to the person first. The ceiling is a
+    #: setting and is checked in the intake; the bound here only keeps an absurd
+    #: body from being parsed into a string at all.
+    spec: str = Field(default="", max_length=1_000_000)
+
+
+class LimitsOut(BaseModel):
+    spec_max_bytes: int
+    spec_max_chars: int
+
+
+@router.get("/limits", response_model=LimitsOut)
+def read_limits(membership: Membership = Depends(_writer)):
+    """The ceilings of a specification — so that the screen refuses a file before sending it."""
+    settings = get_settings()
+    return LimitsOut(
+        spec_max_bytes=settings.ai_max_spec_bytes, spec_max_chars=settings.ai_max_spec_chars
+    )
+
+
+class SpecTextOut(BaseModel):
+    text: str
+    chars: int
+
+
+@router.post(UPLOAD_PATH.removeprefix(router.prefix), response_model=SpecTextOut)
+def extract_spec(
+    filename: str = Query(min_length=1, max_length=255),
+    data: bytes = Body(media_type="application/octet-stream"),
+    membership: Membership = Depends(_writer),
+    db: DbSession = Depends(get_db),
+):
+    """A specification file turned into text. The model is not called and nothing is stored.
+
+    The text goes back to the screen rather than straight into a session:
+    extraction is lossy, and the person has to see what the model will be given.
+
+    The body is the file itself rather than a multipart form: one file needs no
+    form, and a form would need a parser the application does not otherwise have.
+    """
+    settings = get_settings()
+    # The middleware's ceiling trusts Content-Length; this one counts what arrived.
+    if len(data) > settings.ai_max_spec_bytes:
+        raise HTTPException(status_code=413, detail="body_too_large")
+    # Parsing a PDF costs CPU, and the route is open to every editor: the same
+    # per-organization rate as the model calls, on a counter of its own so that
+    # uploads do not eat the interview's allowance.
+    if not throttle.hit(
+        db,
+        f"ai-spec:org:{membership.org_id}",
+        limit=settings.ai_requests_per_minute,
+        window_seconds=60,
+    ):
+        raise HTTPException(status_code=429, detail="ai_rate_limited")
+    try:
+        text = extract(filename, data)
+    except SpecError as error:
+        raise HTTPException(status_code=422, detail=error.code)
+    return SpecTextOut(text=text, chars=len(text))
 
 
 @router.post("/sessions", status_code=201)
@@ -191,8 +256,17 @@ def start_session(
     provider = _provider(db, org)
     try:
         session = intake.start(
-            db, org=org, user=user, locale=payload.locale or user.locale, provider=provider
+            db,
+            org=org,
+            user=user,
+            locale=payload.locale or user.locale,
+            provider=provider,
+            spec=payload.spec,
         )
+    except intake.IntakeError as error:
+        # A specification over the ceiling: a refusal of the form, before the
+        # model is called and before a session exists.
+        raise HTTPException(status_code=422, detail=error.code)
     except LlmError as error:
         raise _refuse(error)
     return _out(session)

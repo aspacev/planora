@@ -19,6 +19,7 @@ const SESSION = {
   id: "s1",
   status: "interview" as const,
   locale: "ru",
+  spec_chars: 0,
   transcript: [{ question: "Какой результат считается успехом?", answer: null, covered: [] }],
   summary: [] as string[],
   draft: {},
@@ -68,6 +69,9 @@ function aiFixtures(configured = true) {
         model: "gpt-4o-mini",
         configured,
       }),
+    ),
+    http.get("/api/ai/limits", () =>
+      HttpResponse.json({ spec_max_bytes: 4_000_000, spec_max_chars: 200 }),
     ),
     http.post("/api/ai/sessions", () => {
       calls.push("start");
@@ -295,5 +299,130 @@ describe("интервью", () => {
     // A gap is a warning, not a lock: the person may know better than the check.
     await userEvent.type(screen.getByLabelText("Название проекта"), "Сайт");
     expect(screen.getByRole("button", { name: "Применить в проект" })).toBeEnabled();
+  });
+});
+
+describe("старт с технического задания", () => {
+  const SPEC = "Сайт-визитка. Главная страница с формой заявки. Срок — 1 июня.";
+
+  /** The session start that records the specification it was sent. */
+  function recordStart() {
+    const sent: { spec?: string }[] = [];
+    server.use(
+      http.post("/api/ai/sessions", async ({ request }) => {
+        sent.push((await request.json()) as { spec?: string });
+        return HttpResponse.json({ ...SESSION, spec_chars: SPEC.length }, { status: 201 });
+      }),
+    );
+    return sent;
+  }
+
+  it("вставленный текст уходит в сессию, а интервью спрашивает только недостающее", async () => {
+    aiFixtures();
+    const sent = recordStart();
+    renderApp({ route: "/projects/new/ai" });
+
+    const start = await screen.findByRole("button", { name: "Разобрать ТЗ" });
+    // Nothing to process yet.
+    expect(start).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Текст ТЗ"), SPEC);
+    await userEvent.click(start);
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].spec).toBe(SPEC);
+    expect(await screen.findByText(/Вопросы только о том, чего нет в ТЗ/)).toBeInTheDocument();
+  });
+
+  it("обычное интервью стартует без ТЗ и без подсказки про него", async () => {
+    aiFixtures();
+    const sent: { spec?: string }[] = [];
+    server.use(
+      http.post("/api/ai/sessions", async ({ request }) => {
+        sent.push((await request.json()) as { spec?: string });
+        return HttpResponse.json(SESSION, { status: 201 });
+      }),
+    );
+    renderApp({ route: "/projects/new/ai" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Начать интервью" }));
+
+    await screen.findByText("Какой результат считается успехом?");
+    expect(sent[0].spec).toBe("");
+    expect(screen.queryByText(/Вопросы только о том, чего нет в ТЗ/)).toBeNull();
+  });
+
+  it("файл превращается в текст в поле — и до кнопки никуда не уходит", async () => {
+    const calls = aiFixtures();
+    const uploads: { filename: string | null; type: string | null }[] = [];
+    server.use(
+      http.post("/api/ai/spec/extract", ({ request }) => {
+        uploads.push({
+          filename: new URL(request.url).searchParams.get("filename"),
+          type: request.headers.get("content-type"),
+        });
+        return HttpResponse.json({ text: SPEC, chars: SPEC.length });
+      }),
+    );
+    renderApp({ route: "/projects/new/ai" });
+
+    const file = new File(["bytes"], "ТЗ сайт.docx");
+    await userEvent.upload(await screen.findByLabelText("Файл ТЗ"), file);
+
+    // The person sees exactly what the model will read, and can still edit it.
+    await waitFor(() => expect(screen.getByLabelText("Текст ТЗ")).toHaveValue(SPEC));
+    expect(uploads).toEqual([{ filename: "ТЗ сайт.docx", type: "application/octet-stream" }]);
+    expect(screen.getByText(`Знаков: ${SPEC.length} из 200`)).toBeInTheDocument();
+    expect(calls).not.toContain("start");
+  });
+
+  it("нечитаемый файл объясняет, что делать", async () => {
+    aiFixtures();
+    server.use(
+      http.post("/api/ai/spec/extract", () =>
+        HttpResponse.json({ detail: "spec_empty" }, { status: 422 }),
+      ),
+    );
+    renderApp({ route: "/projects/new/ai" });
+
+    await userEvent.upload(await screen.findByLabelText("Файл ТЗ"), new File(["x"], "scan.pdf"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("В файле нет текста");
+  });
+
+  it("слишком большой файл не отправляется вовсе", async () => {
+    aiFixtures();
+    let uploaded = false;
+    server.use(
+      http.get("/api/ai/limits", () =>
+        HttpResponse.json({ spec_max_bytes: 3, spec_max_chars: 200 }),
+      ),
+      http.post("/api/ai/spec/extract", () => {
+        uploaded = true;
+        return HttpResponse.json({ text: SPEC, chars: SPEC.length });
+      }),
+    );
+    renderApp({ route: "/projects/new/ai" });
+    const picker = await screen.findByLabelText("Файл ТЗ");
+    // The ceiling has to arrive first: before it the screen cannot know the file is too large.
+    // The counter is the visible sign that it has.
+    await userEvent.type(screen.getByLabelText("Текст ТЗ"), "я");
+    await screen.findByText("Знаков: 1 из 200");
+
+    await userEvent.upload(picker, new File(["больше трёх байт"], "tz.txt"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Файл слишком большой");
+    expect(uploaded).toBe(false);
+  });
+
+  it("текст длиннее лимита не даёт начать и говорит, насколько он длиннее", async () => {
+    aiFixtures();
+    renderApp({ route: "/projects/new/ai" });
+    const field = await screen.findByLabelText("Текст ТЗ");
+
+    fireEvent.change(field, { target: { value: "я".repeat(201) } });
+
+    expect(await screen.findByText(/Знаков: 201 из 200\. Сократите текст/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Разобрать ТЗ" })).toBeDisabled();
   });
 });

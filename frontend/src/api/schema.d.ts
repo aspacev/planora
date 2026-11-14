@@ -47,6 +47,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Limits
+         * @description The ceilings of a specification — so that the screen refuses a file before sending it.
+         */
+        get: operations["read_limits_api_ai_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/sessions": {
         parameters: {
             query?: never;
@@ -154,6 +174,32 @@ export interface paths {
          * @description Gate 1: "here is what I understood about the project".
          */
         post: operations["build_summary_api_ai_sessions__session_id__summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/spec/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Spec
+         * @description A specification file turned into text. The model is not called and nothing is stored.
+         *
+         *     The text goes back to the screen rather than straight into a session:
+         *     extraction is lossy, and the person has to see what the model will be given.
+         *
+         *     The body is the file itself rather than a multipart form: one file needs no
+         *     form, and a form would need a parser the application does not otherwise have.
+         */
+        post: operations["extract_spec_api_ai_spec_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2099,6 +2145,13 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** LimitsOut */
+        LimitsOut: {
+            /** Spec Max Bytes */
+            spec_max_bytes: number;
+            /** Spec Max Chars */
+            spec_max_chars: number;
+        };
         /** LoginIn */
         LoginIn: {
             /**
@@ -2924,6 +2977,13 @@ export interface components {
             /** Url */
             url: string | null;
         };
+        /** SpecTextOut */
+        SpecTextOut: {
+            /** Chars */
+            chars: number;
+            /** Text */
+            text: string;
+        };
         /** SplitIn */
         SplitIn: {
             /** Parts */
@@ -2935,6 +2995,11 @@ export interface components {
         StartIn: {
             /** Locale */
             locale?: string | null;
+            /**
+             * Spec
+             * @default
+             */
+            spec: string;
         };
         /** SummaryIn */
         SummaryIn: {
@@ -3100,6 +3165,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CredentialOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_limits_api_ai_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitsOut"];
                 };
             };
             /** @description Validation Error */
@@ -3382,6 +3478,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_spec_api_ai_spec_extract_post: {
+        parameters: {
+            query: {
+                filename: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecTextOut"];
                 };
             };
             /** @description Validation Error */

@@ -43,6 +43,11 @@ class NextQuestion(BaseModel):
 
 # --- step 2: the summary -----------------------------------------------------
 
+#: The ceiling on summary points. It was 40 while a summary came from a dozen
+#: interview answers; a specification of a few pages names more requirements
+#: than that, and each must stay a point of its own to be traceable to a task.
+MAX_THESES = 100
+
 SUMMARY_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -57,7 +62,7 @@ class Summary(BaseModel):
     following prompt, inflating the token bill."""
     model_config = ConfigDict(extra="ignore")
 
-    theses: list[str] = Field(min_length=1, max_length=40)
+    theses: list[str] = Field(min_length=1, max_length=MAX_THESES)
 
     @field_validator("theses", mode="after")
     @classmethod
@@ -132,7 +137,7 @@ class DraftTask(BaseModel):
     # Optional here although the request schema demands it: a draft edited by
     # hand, and a draft stored before references existed, must still parse. A
     # missing list means "no origin", and coverage reports it as such.
-    sources: list[int] = Field(default_factory=list, max_length=40)
+    sources: list[int] = Field(default_factory=list, max_length=MAX_THESES)
 
     @field_validator("description", mode="after")
     @classmethod
@@ -157,7 +162,7 @@ class Draft(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     categories: list[DraftCategory] = Field(min_length=1, max_length=50)
-    context_theses: list[int] = Field(default_factory=list, max_length=40)
+    context_theses: list[int] = Field(default_factory=list, max_length=MAX_THESES)
 
 
 # --- the "split a task" step -------------------------------------------------

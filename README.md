@@ -498,7 +498,6 @@ frontend/
     auth/  live/  i18n/  components/  test/
 api/index.py        Vercel ASGI entrypoint
 docker/             backup script, Postgres init
-config/             intake_topics.yml — required AI interview topics
 docs/               screenshots, design specs, audits, brand assets
 ```
 

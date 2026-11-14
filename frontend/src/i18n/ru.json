@@ -961,7 +961,15 @@
       "task_duration": "Длительность «{name}»",
       "drop": "Удалить",
       "project_name": "Название проекта",
-      "apply": "Применить в проект"
+      "apply": "Применить в проект",
+      "trace_title": "Сверка с конспектом",
+      "trace_clean": "Все тезисы учтены, у каждой задачи есть тезис-источник",
+      "trace_gaps": "Проверьте план. Тезисов без задач: {uncovered}. Задач без тезиса: {unsourced}",
+      "thesis_covered": "есть задачи",
+      "thesis_context": "контекст, задача не нужна",
+      "thesis_uncovered": "нет задачи",
+      "task_sources": "Тезисы: {numbers}",
+      "task_unsourced": "Нет тезиса"
     }
   },
   "jira": {

@@ -17,10 +17,26 @@ export type DraftTask = {
   start_date: string;
   duration_days: number;
   criticality?: Criticality;
+  /** The 1-based numbers of the summary points the task follows from. Empty — it follows from none. */
+  sources?: number[];
 };
 
 export type DraftCategory = { name: string; tasks: DraftTask[] };
-export type Draft = { categories: DraftCategory[] };
+export type Draft = {
+  categories: DraftCategory[];
+  /** Summary points that need no task: a constraint, an exclusion, a fact about the project. */
+  context_theses?: number[];
+};
+
+/**
+ * The draft checked against the summary, by the server: the model's own word that it lost nothing
+ * is not evidence. Thesis numbers are 1-based; tasks are addressed by their position in the draft.
+ */
+export type DraftCoverage = {
+  uncovered: number[];
+  context: number[];
+  unsourced: { category: number; task: number }[];
+};
 
 export type AiSession = {
   id: string;
@@ -29,6 +45,8 @@ export type AiSession = {
   transcript: { question: string; answer: string | null; covered: string[] }[];
   summary: string[];
   draft: Draft | Record<string, never>;
+  /** `null` until there is a draft to check. */
+  coverage: DraftCoverage | null;
   tokens_used: number;
   project_id: string | null;
   applied_batch_id: string | null;

@@ -943,7 +943,15 @@
       "task_duration": "«{name}» müddəti",
       "drop": "Sil",
       "project_name": "Layihənin adı",
-      "apply": "Layihəyə tətbiq et"
+      "apply": "Layihəyə tətbiq et",
+      "trace_title": "Xülasə ilə tutuşdurma",
+      "trace_clean": "Bütün tezislər nəzərə alınıb, hər tapşırığın mənbə tezisi var",
+      "trace_gaps": "Planı yoxlayın. Tapşırığı olmayan tezislər: {uncovered}. Tezisi olmayan tapşırıqlar: {unsourced}",
+      "thesis_covered": "tapşırıqlar var",
+      "thesis_context": "kontekst, tapşırıq lazım deyil",
+      "thesis_uncovered": "tapşırıq yoxdur",
+      "task_sources": "Tezislər: {numbers}",
+      "task_unsourced": "Tezis yoxdur"
     }
   },
   "jira": {

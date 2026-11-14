@@ -22,6 +22,7 @@ const SESSION = {
   transcript: [{ question: "Какой результат считается успехом?", answer: null, covered: [] }],
   summary: [] as string[],
   draft: {},
+  coverage: null,
   tokens_used: 120,
   project_id: null,
   applied_batch_id: null,
@@ -36,15 +37,26 @@ const SUMMARY_STATE = {
 const DRAFT_STATE = {
   ...SESSION,
   status: "draft" as const,
+  summary: SUMMARY_STATE.summary,
   draft: {
+    context_theses: [2],
     categories: [
       {
         name: "Дизайн",
-        tasks: [{ name: "Логотип", start_date: "2026-03-02", duration_days: 5 }],
+        tasks: [{ name: "Логотип", start_date: "2026-03-02", duration_days: 5, sources: [1] }],
       },
     ],
   },
+  coverage: { uncovered: [] as number[], context: [2], unsourced: [] as { category: number; task: number }[] },
 };
+
+async function toTheDraft() {
+  renderApp({ route: "/projects/new/ai" });
+  await userEvent.click(await screen.findByRole("button", { name: "Начать интервью" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Хватит, генерируй" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Сгенерировать план" }));
+  await screen.findByText("Черновик плана");
+}
 
 function aiFixtures(configured = true) {
   const calls: string[] = [];
@@ -232,5 +244,56 @@ describe("интервью", () => {
 
     await waitFor(() => expect(calls).toContain("edit-draft"));
     expect(calls).not.toContain("apply");
+  });
+
+  it("черновик показывает, из какого тезиса выросла задача", async () => {
+    aiFixtures();
+    await toTheDraft();
+
+    const origin = screen.getByText("Тезисы: 1");
+    // The number alone would send the eyes up the page: the point's text is one hover away.
+    expect(origin).toHaveAttribute("title", "1. Сайт-визитка к июню");
+
+    const trace = screen.getByRole("region", { name: "Сверка с конспектом" });
+    expect(within(trace).getByRole("status")).toHaveTextContent("Все тезисы учтены");
+    const points = within(trace).getAllByRole("listitem");
+    expect(points[0]).toHaveTextContent("Сайт-визитка к июню");
+    expect(points[0]).toHaveTextContent("есть задачи");
+    expect(points[1]).toHaveTextContent("контекст, задача не нужна");
+  });
+
+  it("потерянный тезис и задача без тезиса видны до применения", async () => {
+    aiFixtures();
+    server.use(
+      http.post("/api/ai/sessions/s1/draft", () =>
+        HttpResponse.json({
+          ...DRAFT_STATE,
+          draft: {
+            context_theses: [],
+            categories: [
+              {
+                name: "Дизайн",
+                tasks: [
+                  { name: "Логотип", start_date: "2026-03-02", duration_days: 5, sources: [1] },
+                  { name: "Реклама", start_date: "2026-03-09", duration_days: 3, sources: [] },
+                ],
+              },
+            ],
+          },
+          coverage: { uncovered: [2], context: [], unsourced: [{ category: 0, task: 1 }] },
+        }),
+      ),
+    );
+    await toTheDraft();
+
+    const trace = screen.getByRole("region", { name: "Сверка с конспектом" });
+    expect(within(trace).getByRole("status")).toHaveTextContent(
+      "Тезисов без задач: 1. Задач без тезиса: 1",
+    );
+    expect(within(trace).getAllByRole("listitem")[1]).toHaveTextContent("нет задачи");
+    expect(screen.getByText("Нет тезиса")).toBeInTheDocument();
+    // A gap is a warning, not a lock: the person may know better than the check.
+    await userEvent.type(screen.getByLabelText("Название проекта"), "Сайт");
+    expect(screen.getByRole("button", { name: "Применить в проект" })).toBeEnabled();
   });
 });

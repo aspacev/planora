@@ -60,7 +60,11 @@ def user(db, authed) -> User:
 
 QUESTION = {"question": "Какой результат считается успехом?", "covered_topics": ["goal"]}
 SUMMARY = {"theses": ["Сайт-визитка к июню", "Дизайн делает подрядчик"]}
+# Every task cites the summary points it follows from, and every point is cited:
+# a draft with a gap is sent back to the model, which would cost these tests an
+# extra recorded answer.
 DRAFT = {
+    "context_theses": [],
     "categories": [
         {
             "name": "Дизайн",
@@ -71,13 +75,19 @@ DRAFT = {
                     "start_date": "2026-03-02",
                     "duration_days": 5,
                     "criticality": "high",
+                    "sources": [1, 2],
                 }
             ],
         },
         {
             "name": "Разработка",
             "tasks": [
-                {"name": "Вёрстка", "start_date": "2026-03-09", "duration_days": 10}
+                {
+                    "name": "Вёрстка",
+                    "start_date": "2026-03-09",
+                    "duration_days": 10,
+                    "sources": [1],
+                }
             ],
         },
     ]
@@ -421,6 +431,247 @@ def test_only_the_owner_sees_and_sets_the_connection(authed, db):
     )
 
 
+# --- tracing the draft back to the summary -------------------------------------
+
+THREE_THESES = {
+    "theses": ["Сайт-визитка к июню", "Нужна форма заявки", "Бюджет согласован и не меняется"]
+}
+
+
+def _draft(*tasks: dict, context: list[int] | None = None) -> dict:
+    return {
+        "context_theses": context or [],
+        "categories": [
+            {
+                "name": "Разработка",
+                "tasks": [
+                    {"start_date": "2026-03-02", "duration_days": 3, **task} for task in tasks
+                ],
+            }
+        ],
+    }
+
+
+LOST_A_POINT = _draft({"name": "Вёрстка", "sources": [1]}, context=[3])
+INVENTED_A_TASK = _draft(
+    {"name": "Вёрстка", "sources": [1]},
+    {"name": "Форма заявки", "sources": [2]},
+    {"name": "Мобильное приложение", "sources": []},
+    context=[3],
+)
+TRACED = _draft(
+    {"name": "Вёрстка", "sources": [1]}, {"name": "Форма заявки", "sources": [2]}, context=[3]
+)
+
+
+def _at_the_summary(db, org, user, provider) -> AiSession:
+    session = _interview(db, org, user, provider)
+    intake.make_summary(db, session, provider)
+    return session
+
+
+def test_the_summary_points_reach_the_model_numbered(db, org, user):
+    """The references are numbers, so the model has to be shown the numbers."""
+    provider = RecordedProvider([QUESTION, THREE_THESES, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    request = provider.calls[-1][-1]["content"]
+    assert "1. Сайт-визитка к июню" in request
+    assert "3. Бюджет согласован и не меняется" in request
+
+
+def test_a_draft_that_lost_a_summary_point_is_sent_back_with_the_point_named(db, org, user):
+    provider = RecordedProvider([QUESTION, THREE_THESES, LOST_A_POINT, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+
+    draft = intake.make_draft(db, session, provider)
+
+    repair = provider.calls[-1]
+    # The model sees its own draft and the exact gap rather than "try again".
+    assert repair[-2]["role"] == "assistant"
+    assert "Тезисы без задач: 2." in repair[-1]["content"]
+    assert [task["name"] for task in draft["categories"][0]["tasks"]] == ["Вёрстка", "Форма заявки"]
+    assert intake.draft_coverage(session).clean
+
+
+def test_a_task_with_no_origin_is_sent_back_by_name(db, org, user):
+    provider = RecordedProvider([QUESTION, THREE_THESES, INVENTED_A_TASK, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    assert "Задачи без тезиса: «Мобильное приложение»." in provider.calls[-1][-1]["content"]
+    assert intake.draft_coverage(session).clean
+
+
+def test_a_point_declared_as_context_needs_no_task(db, org, user):
+    """"The budget is fixed" is a constraint: demanding a task for it would make the model invent one."""
+    provider = RecordedProvider([QUESTION, THREE_THESES, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    gaps = intake.draft_coverage(session)
+    assert gaps.context == [3]
+    assert gaps.uncovered == []
+    # One call for the draft: nothing to repair.
+    assert len(provider.calls) == 3
+
+
+def test_gaps_that_survive_the_retries_are_reported_rather_than_refused(db, org, user, monkeypatch):
+    """A draft with a gap is still a plan: the person at the gate sees the gap and decides."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 1, raising=False)
+    provider = RecordedProvider([QUESTION, THREE_THESES, INVENTED_A_TASK, LOST_A_POINT])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    assert session.status == "draft"
+    gaps = intake.draft_coverage(session)
+    # Both attempts have one gap; the later one is kept.
+    assert gaps.uncovered == [2]
+    assert gaps.unsourced == []
+
+
+def test_a_repair_that_came_back_worse_does_not_replace_the_better_draft(
+    db, org, user, monkeypatch
+):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 1, raising=False)
+    worse = _draft({"name": "Мобильное приложение", "sources": []})
+    provider = RecordedProvider([QUESTION, THREE_THESES, LOST_A_POINT, worse])
+    session = _at_the_summary(db, org, user, provider)
+
+    draft = intake.make_draft(db, session, provider)
+
+    assert [task["name"] for task in draft["categories"][0]["tasks"]] == ["Вёрстка"]
+
+
+def test_a_broken_repair_keeps_the_draft_that_passed_the_schema(db, org, user, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 1, raising=False)
+    provider = RecordedProvider([QUESTION, THREE_THESES, LOST_A_POINT, BROKEN_DRAFT])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    assert session.status == "draft"
+    assert intake.draft_coverage(session).uncovered == [2]
+
+
+def test_out_of_range_references_are_stripped_from_the_stored_draft(db, org, user, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 0, raising=False)
+    cites_nothing_real = _draft(
+        {"name": "Вёрстка", "sources": [2, 1, 1]}, {"name": "Реклама", "sources": [9]}, context=[3, 7]
+    )
+    provider = RecordedProvider([QUESTION, THREE_THESES, cites_nothing_real])
+    session = _at_the_summary(db, org, user, provider)
+
+    draft = intake.make_draft(db, session, provider)
+
+    tasks = draft["categories"][0]["tasks"]
+    assert tasks[0]["sources"] == [1, 2]
+    assert tasks[1]["sources"] == []
+    assert draft["context_theses"] == [3]
+    assert intake.draft_coverage(session).unsourced == [(0, 1)]
+
+
+def test_deleting_a_task_by_hand_uncovers_its_point(db, org, user):
+    provider = RecordedProvider([QUESTION, THREE_THESES, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+    intake.make_draft(db, session, provider)
+
+    intake.edit_draft(db, session, LOST_A_POINT)
+
+    assert intake.draft_coverage(session).uncovered == [2]
+
+
+def test_editing_the_summary_moves_the_references_with_the_points(db, org, user):
+    """References are positions: deleting point 1 must not re-aim "2" at another sentence."""
+    provider = RecordedProvider([QUESTION, THREE_THESES, TRACED])
+    session = _at_the_summary(db, org, user, provider)
+    intake.make_draft(db, session, provider)
+
+    intake.edit_summary(
+        db, session, ["Нужна форма заявки", "Бюджет согласован и не меняется", "Домен уже куплен"]
+    )
+
+    tasks = session.draft["categories"][0]["tasks"]
+    # "Вёрстка" followed from the deleted point and lost its origin; the form task
+    # followed its point from number 2 to number 1.
+    assert [task["sources"] for task in tasks] == [[], [1]]
+    assert session.draft["context_theses"] == [2]
+    gaps = intake.draft_coverage(session)
+    assert gaps.unsourced == [(0, 0)]
+    # The point added by hand has no task yet.
+    assert gaps.uncovered == [3]
+
+
+def test_a_draft_without_references_still_parses(db, org, user, monkeypatch):
+    """A draft stored before references existed, or edited by hand, is unsourced rather than invalid."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 0, raising=False)
+    legacy = {
+        "categories": [
+            {"name": "Дизайн", "tasks": [{"name": "Логотип", "start_date": "2026-03-02", "duration_days": 5}]}
+        ]
+    }
+    provider = RecordedProvider([QUESTION, SUMMARY, legacy])
+    session = _at_the_summary(db, org, user, provider)
+
+    intake.make_draft(db, session, provider)
+
+    gaps = intake.draft_coverage(session)
+    assert gaps.uncovered == [1, 2]
+    assert gaps.unsourced == [(0, 0)]
+
+
+def test_the_rules_of_each_step_reach_the_prompt(db, org, user):
+    """The rules file is read and lands in the request of the step it belongs to."""
+    provider = RecordedProvider([QUESTION, SUMMARY, DRAFT])
+    session = _at_the_summary(db, org, user, provider)
+    intake.make_draft(db, session, provider)
+
+    question, summary, draft = (call[-1]["content"] for call in provider.calls)
+    assert "Не додумывай за человека" in question
+    assert "Один тезис — один факт" in summary
+    assert "Категории не пересекаются" in draft
+    # The rules of one step do not leak into another.
+    assert "Категории не пересекаются" not in summary
+
+
+def test_the_draft_request_states_todays_date(db, org, user):
+    """The model has no clock, and the plan is laid out from today."""
+    from datetime import datetime, timezone
+
+    provider = RecordedProvider([QUESTION, SUMMARY, DRAFT])
+    session = _at_the_summary(db, org, user, provider)
+    intake.make_draft(db, session, provider)
+
+    assert datetime.now(timezone.utc).date().isoformat() in provider.calls[-1][-1]["content"]
+
+
+def test_the_config_files_ship_inside_the_backend_package():
+    """Both files must sit under backend/app: that is all the Docker image and the Vercel bundle carry."""
+    from pathlib import Path
+
+    import app
+
+    package = Path(app.__file__).resolve().parent
+    for path in (intake._TOPICS_FILE, intake._RULES_FILE):
+        assert path.is_file()
+        assert package in path.parents
+
+
 def test_topics_are_read_from_the_config_file():
     """The list of mandatory topics is a file next to the application rather than a table in the database."""
     keys = {topic["key"] for topic in intake.topics()}
@@ -450,8 +701,11 @@ def test_the_session_walks_the_whole_way_over_http(authed, db, org, monkeypatch)
     summary = authed.post(f"/api/ai/sessions/{session_id}/summary")
     assert summary.json()["summary"] == SUMMARY["theses"]
 
+    assert summary.json()["coverage"] is None
+
     draft = authed.post(f"/api/ai/sessions/{session_id}/draft")
     assert draft.json()["status"] == "draft"
+    assert draft.json()["coverage"] == {"uncovered": [], "context": [], "unsourced": []}
 
     applied = authed.post(f"/api/ai/sessions/{session_id}/apply", json={"name": "Сайт"})
     assert applied.status_code == 201

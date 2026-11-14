@@ -13,7 +13,7 @@ import {
   readCredential,
   startSession,
 } from "../api/ai";
-import type { AiSession, Draft } from "../api/ai";
+import type { AiSession, Draft, DraftCoverage } from "../api/ai";
 import { errorKey } from "../api/errors";
 import { useLocale } from "../i18n/LocaleProvider";
 
@@ -164,6 +164,8 @@ export function AiIntake() {
       {session !== null && session.status === "draft" && (
         <DraftGate
           draft={session.draft as Draft}
+          theses={session.summary}
+          coverage={session.coverage}
           pending={apply.isPending || saveDraft.isPending}
           onSave={(next) => saveDraft.mutate(next)}
           onApply={(name) => apply.mutate(name)}
@@ -216,11 +218,15 @@ function SummaryGate({
 /** Gate 2: the draft is edited whole, and nothing has been written into the project. */
 function DraftGate({
   draft,
+  theses,
+  coverage,
   pending,
   onSave,
   onApply,
 }: {
   draft: Draft;
+  theses: string[];
+  coverage: DraftCoverage | null;
   pending: boolean;
   onSave: (draft: Draft) => void;
   onApply: (name: string) => void;
@@ -272,6 +278,8 @@ function DraftGate({
       <h2>{t("ai.draft.title")}</h2>
       <p className="muted">{t("ai.draft.hint")}</p>
 
+      {coverage !== null && <DraftTrace theses={theses} coverage={coverage} draft={work} />}
+
       {/* The key is a number rather than a name: the names are given to the categories by the model,
           and nothing stops two of them from coinciding; the edits, meanwhile, are addressed by number. */}
       {work.categories?.map((category, categoryIndex) => (
@@ -316,6 +324,7 @@ function DraftGate({
                 >
                   {t("ai.draft.drop")}
                 </button>
+                <TaskOrigin sources={task.sources ?? []} theses={theses} />
               </li>
             ))}
           </ul>
@@ -339,6 +348,86 @@ function DraftGate({
       >
         {t("ai.draft.apply")}
       </button>
+    </section>
+  );
+}
+
+/**
+ * Where a task came from: the numbers of the summary points behind it.
+ *
+ * Read from the task itself rather than from the server's list of unsourced tasks: that list
+ * addresses tasks by position, and between a deletion and the server's answer to it the positions
+ * on screen and in the list differ by one — the warning would sit on the neighbouring row.
+ */
+function TaskOrigin({ sources, theses }: { sources: number[]; theses: string[] }) {
+  const { t } = useLocale();
+
+  if (sources.length === 0) {
+    return <span className="ai__origin ai__origin--missing">{t("ai.draft.task_unsourced")}</span>;
+  }
+  return (
+    // The full text of the points is in the tooltip: a number alone sends the eyes up the page.
+    <span
+      className="ai__origin"
+      title={sources.map((number) => `${number}. ${theses[number - 1] ?? ""}`).join("\n")}
+    >
+      {t("ai.draft.task_sources", { numbers: sources.join(", ") })}
+    </span>
+  );
+}
+
+/**
+ * The draft checked against the summary: which points got a task, which were set aside as context,
+ * and which the plan lost.
+ *
+ * It stands above the tasks because it answers the first question a person has about a generated
+ * plan — "is everything I said in here?" — and that question is not answerable by reading forty rows.
+ */
+function DraftTrace({
+  theses,
+  coverage,
+  draft,
+}: {
+  theses: string[];
+  coverage: DraftCoverage;
+  draft: Draft;
+}) {
+  const { t } = useLocale();
+  const unsourced = (draft.categories ?? []).reduce(
+    (count, category) =>
+      count + category.tasks.filter((task) => (task.sources ?? []).length === 0).length,
+    0,
+  );
+  const clean = coverage.uncovered.length === 0 && unsourced === 0;
+
+  const state = (number: number) => {
+    if (coverage.uncovered.includes(number)) return "uncovered";
+    if (coverage.context.includes(number)) return "context";
+    return "covered";
+  };
+
+  return (
+    <section className="ai__trace" aria-labelledby="ai-trace-title">
+      <h3 id="ai-trace-title">{t("ai.draft.trace_title")}</h3>
+      {/* A status rather than an alert: gaps do not block applying, a person may know better than
+          the check — but they must not be able to miss them. */}
+      <p className={clean ? "muted" : "ai__trace-gaps"} role="status">
+        {clean
+          ? t("ai.draft.trace_clean")
+          : t("ai.draft.trace_gaps", { uncovered: coverage.uncovered.length, unsourced })}
+      </p>
+      <ol className="ai__theses">
+        {theses.map((thesis, index) => {
+          const kind = state(index + 1);
+          return (
+            <li key={index} className={`ai__thesis ai__thesis--${kind}`}>
+              {/* The thesis is content in the session's language and is not translated. */}
+              <span>{thesis}</span>
+              <span className={`ai__mark ai__mark--${kind}`}>{t(`ai.draft.thesis_${kind}`)}</span>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

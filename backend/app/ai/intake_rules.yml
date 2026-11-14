@@ -1,0 +1,38 @@
+# The rules the model follows at each step of the intake.
+#
+# A file rather than strings in the code, for the same reason as
+# intake_topics.yml: how a plan should be cut into categories and how large a
+# task may be is a decision of whoever runs the installation, and it is tuned
+# far more often than the code around it. It sits next to the topics file,
+# inside backend/app, so that it reaches both the Docker image and the Vercel
+# bundle.
+#
+# Each rule is one sentence in the development language; the model answers in
+# the session's language regardless.
+#
+# What is NOT here: the instruction to cite summary points in `sources` and to
+# list `context_theses`. That one is checked by the code (see coverage.py), so
+# it lives in the code — a rule that can be deleted from a file must not be one
+# the server relies on.
+rules:
+  interview:
+    - Не додумывай за человека. Если ответ допускает два толкования, уточни это следующим вопросом.
+    - Не спрашивай то, на что в разговоре уже есть ответ.
+    - Спрашивай про конкретные работы и результаты, а не про общие пожелания.
+
+  summary:
+    - Один тезис — один факт или одно требование. Два требования в одном тезисе не объединяй.
+    - Перечисли каждое требование к объёму работ, которое прозвучало. Не сворачивай несколько требований в общие слова.
+    - Не добавляй работ и требований, которых человек не называл.
+    - Если тезиса не было в ответах и ты его предполагаешь, начни его словом «Допущение:», переведённым на язык сессии.
+    - Отдельными тезисами запиши, что в проект не входит и какие есть ограничения.
+
+  draft:
+    - Раздели план на категории по одному признаку — либо по этапам работ, либо по направлениям. Не смешивай оба признака в одном плане.
+    - Категории не пересекаются. Каждая задача очевидно относится ровно к одной категории.
+    - Задача — это один проверяемый результат, а не процесс. По названию должно быть понятно, что считается готовым.
+    - Длительность задачи — от 1 до 10 рабочих дней. Более крупную работу разбей на несколько задач.
+    - Не создавай задач, которые не следуют из тезисов. Не придумывай работы «на всякий случай».
+    - Не создавай задач по тезисам о том, что в проект не входит.
+    - Расставь задачи в порядке выполнения. Задача не начинается раньше, чем заканчивается то, от чего она зависит.
+    - Допущение из тезисов не превращай в факт. Если задача опирается на допущение, скажи об этом в её описании.

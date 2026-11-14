@@ -943,7 +943,15 @@
       "task_duration": "Duration of “{name}”",
       "drop": "Remove",
       "project_name": "Project name",
-      "apply": "Apply to a project"
+      "apply": "Apply to a project",
+      "trace_title": "Checked against the summary",
+      "trace_clean": "Every summary point is accounted for, and every task has a source point",
+      "trace_gaps": "Check the plan. Points with no task: {uncovered}. Tasks with no source point: {unsourced}",
+      "thesis_covered": "has tasks",
+      "thesis_context": "context, no task needed",
+      "thesis_uncovered": "no task",
+      "task_sources": "Points: {numbers}",
+      "task_unsourced": "No source point"
     }
   },
   "jira": {

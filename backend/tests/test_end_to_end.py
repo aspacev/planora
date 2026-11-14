@@ -30,6 +30,9 @@ DRAFT = {
                     "start_date": "2026-03-02",
                     "duration_days": 5,
                     "criticality": "high",
+                    # Both summary points are behind the one task: a draft that
+                    # leaves a point without a task is sent back to the model.
+                    "sources": [1, 2],
                 }
             ],
         }

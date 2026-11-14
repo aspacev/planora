@@ -153,6 +153,7 @@ def _provider(db: DbSession, org: Organization) -> LlmProvider:
 
 
 def _out(session: AiSession) -> dict:
+    gaps = intake.draft_coverage(session)
     return {
         "id": str(session.id),
         "status": session.status,
@@ -160,6 +161,9 @@ def _out(session: AiSession) -> dict:
         "transcript": session.transcript,
         "summary": session.summary,
         "draft": session.draft,
+        # Which summary points the draft lost and which tasks have no origin.
+        # `None` until there is a draft to judge.
+        "coverage": gaps.as_json() if gaps is not None else None,
         "tokens_used": session.tokens_used,
         "project_id": str(session.project_id) if session.project_id else None,
         "applied_batch_id": (

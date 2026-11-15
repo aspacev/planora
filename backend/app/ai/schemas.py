@@ -8,6 +8,14 @@ language.
 Validation happens on our side, not only in the request's `response_format`:
 the model's promises cannot be trusted, and one cloud's "strict mode" says
 nothing about a local model behind the same address.
+
+The request schemas carry structure only — types, required fields, enums — and
+no value constraints (`minimum`, `maxLength`, `maxItems` and the like). Strict
+structured output is a subset of JSON Schema that differs between providers,
+and a keyword outside a provider's subset is not ignored but refused: Claude's
+OpenAI-compatible endpoint answers 400 to a schema with `minimum` in it. Every
+bound therefore lives in the Pydantic models below, where it holds for every
+provider alike; a range the model should know about goes into `description`.
 """
 
 from datetime import date
@@ -84,7 +92,7 @@ DRAFT_SCHEMA = {
         # Summary points that need no task of their own: a constraint, an
         # exclusion, a fact. Without this list "every point has a task" would
         # push the model into inventing a task for "the budget is fixed".
-        "context_theses": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+        "context_theses": {"type": "array", "items": {"type": "integer"}},
         "categories": {
             "type": "array",
             "items": {
@@ -107,11 +115,14 @@ DRAFT_SCHEMA = {
                                 # rather than a field it forgot.
                                 "sources": {
                                     "type": "array",
-                                    "items": {"type": "integer", "minimum": 1},
+                                    "items": {"type": "integer"},
                                 },
                                 "description": {"type": "string"},
                                 "start_date": {"type": "string"},
-                                "duration_days": {"type": "integer", "minimum": 1},
+                                "duration_days": {
+                                    "type": "integer",
+                                    "description": "Working days, at least 1.",
+                                },
                                 "criticality": {
                                     "type": "string",
                                     "enum": [level.value for level in Criticality],
@@ -181,7 +192,10 @@ SPLIT_SCHEMA = {
                 "properties": {
                     "name": {"type": "string"},
                     "description": {"type": "string"},
-                    "duration_days": {"type": "integer", "minimum": 1},
+                    "duration_days": {
+                                    "type": "integer",
+                                    "description": "Working days, at least 1.",
+                                },
                 },
             },
         }

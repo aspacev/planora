@@ -45,8 +45,9 @@ _MAX_DOCUMENT_XML_BYTES = 30_000_000
 _MAX_PDF_PAGES = 300
 #: How far past the text ceiling extraction keeps going before giving up. The
 #: text is returned even when it is over the ceiling, so that a person can trim
-#: it in the field — but not when it is over by an order of magnitude.
-_OVERSHOOT = 10
+#: it in the field — but not when it is several times over: that much text is
+#: megabytes sent to a browser field nobody will trim by hand.
+_OVERSHOOT = 3
 
 
 def extract(filename: str, data: bytes) -> str:

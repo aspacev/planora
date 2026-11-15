@@ -96,16 +96,25 @@ class Settings(BaseSettings):
     #: The ceilings of an uploaded specification. Bytes bound the file, characters
     #: bound the text extracted from it — and it is the characters that cost
     #: money: the text rides along in every interview call and in the summary
-    #: call. 30 000 characters of Russian is roughly 12-15 thousand tokens per
-    #: call, which is why a session with a specification also gets fewer
-    #: questions: the specification has already answered most of them, and each
-    #: further question re-sends the whole text.
+    #: call. Russian runs at roughly 12-15 thousand tokens per 30 000
+    #: characters per call, which is why a session with a specification also
+    #: gets fewer questions: the specification has already answered most of
+    #: them, and each further question re-sends the whole text.
+    #:
+    #: The character ceiling is set where a real specification does not reach
+    #: it — a full SRS of fifty pages is about 100 000 characters — rather than
+    #: where it keeps a session cheap. It was 30 000 at first, and the first
+    #: real document uploaded was 46 000: a ceiling that refuses the ordinary
+    #: case teaches people to cut requirements out by hand, which is the loss
+    #: the upload exists to prevent. What a long document costs is bounded by
+    #: AI_DAILY_TOKEN_BUDGET, which is the setting meant to guard the money;
+    #: this one only keeps a pasted book out of the model's context.
     #:
     #: The byte ceiling is below Vercel's 4.5 MB limit on a request body: a file
     #: the platform cuts off before the application sees it would be refused
     #: with the platform's words rather than ours.
     ai_max_spec_bytes: int = 4_000_000
-    ai_max_spec_chars: int = 30_000
+    ai_max_spec_chars: int = 300_000
     ai_max_questions_with_spec: int = 3
     ai_schema_retries: int = 2
     ai_request_timeout: int = 60

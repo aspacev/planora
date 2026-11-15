@@ -1034,11 +1034,22 @@ def test_the_draft_is_built_from_the_approved_summary_not_from_the_file(db, org,
 
 def test_a_long_summary_of_a_specification_fits(db, org, user):
     """A few pages of requirements are more than the forty points an interview used to give."""
-    many = {"theses": [f"Требование {number}" for number in range(1, 101)]}
+    many = {"theses": [f"Требование {number}" for number in range(1, 201)]}
     provider = RecordedProvider([QUESTION, many])
     session = intake.start(db, org=org, user=user, locale="ru", provider=provider, spec=SPEC)
 
-    assert len(intake.make_summary(db, session, provider)) == 100
+    assert len(intake.make_summary(db, session, provider)) == 200
+
+
+def test_a_real_specification_fits_under_the_default_ceiling(db, org, user):
+    """The first real document uploaded was 46 000 characters and was refused at 30 000."""
+    provider = RecordedProvider([QUESTION])
+    long_spec = ("Требование к приложению. " * 2000).strip()
+    assert len(long_spec) > 46_000
+
+    session = intake.start(db, org=org, user=user, locale="ru", provider=provider, spec=long_spec)
+
+    assert session.spec == long_spec
 
 
 # --- the specification over HTTP ------------------------------------------------

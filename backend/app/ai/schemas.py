@@ -52,9 +52,11 @@ class NextQuestion(BaseModel):
 # --- step 2: the summary -----------------------------------------------------
 
 #: The ceiling on summary points. It was 40 while a summary came from a dozen
-#: interview answers; a specification of a few pages names more requirements
-#: than that, and each must stay a point of its own to be traceable to a task.
-MAX_THESES = 100
+#: interview answers; a specification names more requirements than that, and
+#: each must stay a point of its own to be traceable to a task. 200 is where a
+#: full SRS lands; below it the model has to merge requirements to fit, and a
+#: merged point hides which of its halves the plan lost.
+MAX_THESES = 200
 
 SUMMARY_SCHEMA = {
     "type": "object",

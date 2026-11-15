@@ -134,6 +134,7 @@ const PLAIN_CODES = new Set([
   // and the draft are preserved at that.
   "llm_not_configured",
   "llm_unreachable",
+  "llm_timeout",
   "llm_refused",
   "llm_schema_mismatch",
   "llm_bad_json",

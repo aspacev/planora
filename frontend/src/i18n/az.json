@@ -216,6 +216,7 @@
     "member_not_found": "Belə iştirakçı artıq təşkilatda yoxdur",
     "llm_not_configured": "LLM qoşulmayıb",
     "llm_unreachable": "Model əlçatan deyil",
+    "llm_timeout": "Model vaxtında cavab vermədi — yenidən cəhd edin",
     "llm_refused": "Model sorğunu rədd etdi",
     "llm_schema_mismatch": "Model gözlənilən formatda cavab vermədi — yenidən cəhd edin",
     "llm_bad_json": "Modelin cavabını oxumaq olmadı",

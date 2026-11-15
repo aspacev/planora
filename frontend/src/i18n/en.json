@@ -216,6 +216,7 @@
     "member_not_found": "That member is no longer in the organization",
     "llm_not_configured": "No LLM is connected",
     "llm_unreachable": "The model is unreachable",
+    "llm_timeout": "The model took too long to answer — try again",
     "llm_refused": "The model refused the request",
     "llm_schema_mismatch": "The model did not answer in the expected shape — try again",
     "llm_bad_json": "The model's answer could not be read",

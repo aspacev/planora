@@ -117,7 +117,11 @@ class Settings(BaseSettings):
     ai_max_spec_chars: int = 300_000
     ai_max_questions_with_spec: int = 3
     ai_schema_retries: int = 2
-    ai_request_timeout: int = 60
+    #: Seconds to wait for one answer from the model. It was 60, which a model
+    #: that reasons before answering exceeds on a long specification: the wait is
+    #: for the whole answer, not for its first byte. Five minutes covers that; on
+    #: Vercel the function's own 30-second limit cuts in first regardless.
+    ai_request_timeout: int = 300
     #: Allow an LLM address with the http scheme and in private ranges. Forbidden
     #: by default (SSRF protection: the address is set by a user while the server
     #: is what goes there); true is a deliberate choice for a self-hosted

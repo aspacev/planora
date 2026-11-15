@@ -103,6 +103,15 @@ class HttpProvider:
         except urllib.error.HTTPError as error:
             raise LlmError("llm_refused", f"модель ответила {error.code}") from error
         except (urllib.error.URLError, OSError) as error:
+            # A timeout is told apart from an unreachable address: "the model is
+            # unreachable" sends a person to check the key and the network, while
+            # the model was reached and was still thinking — over a long
+            # specification that takes minutes — and the remedy is a longer wait.
+            # urllib reports it two ways: raised as is while reading the answer,
+            # wrapped in URLError while connecting.
+            reason = getattr(error, "reason", error)
+            if isinstance(error, TimeoutError) or isinstance(reason, TimeoutError):
+                raise LlmError("llm_timeout", "модель не успела ответить") from error
             raise LlmError("llm_unreachable", str(error)) from error
         except json.JSONDecodeError as error:
             raise LlmError("llm_bad_json", "ответ не разобрать как JSON") from error

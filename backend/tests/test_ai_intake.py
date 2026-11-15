@@ -1227,3 +1227,36 @@ def test_a_specification_over_the_ceiling_is_a_form_refusal_over_http(authed, db
     assert refused.status_code == 422
     assert refused.json()["detail"] == "spec_too_long"
     assert db.scalars(select(AiSession)).all() == []
+
+
+# --- the wait for the model -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        # Raised as is while the answer is being read.
+        (TimeoutError("timed out"), "llm_timeout"),
+        # Wrapped by urllib while connecting.
+        (__import__("urllib.error").error.URLError(TimeoutError("timed out")), "llm_timeout"),
+        # Anything else on the network is still "unreachable".
+        (__import__("urllib.error").error.URLError("name not resolved"), "llm_unreachable"),
+        (ConnectionRefusedError("refused"), "llm_unreachable"),
+    ],
+)
+def test_a_model_that_is_still_thinking_is_not_reported_as_unreachable(monkeypatch, failure, code):
+    """"Unreachable" sends a person to check the key; a slow answer needs a longer wait instead."""
+    import app.ai.provider as provider_module
+
+    def fail(request, timeout):
+        raise failure
+
+    monkeypatch.setattr(provider_module._opener, "open", fail)
+    provider = provider_module.HttpProvider(
+        base_url="https://llm.example.com/v1", model="m", api_key="k", timeout=1
+    )
+
+    with pytest.raises(LlmError) as error:
+        provider.generate([{"role": "user", "content": "x"}], {"type": "object"})
+
+    assert error.value.code == code

@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.ai.spec import UPLOAD_PATH as SPEC_UPLOAD_PATH
 from app.config import get_settings
 
 # --- observability -----------------------------------------------------------
@@ -170,8 +171,17 @@ async def reject_oversized_bodies(request: Request, call_next):
     (chunked) is rare, and its body will hit the field ceilings anyway — the
     header closes the cheap path without claiming to be airtight.
     """
+    settings = get_settings()
+    # A specification upload is a file, not a form: a Word document with a few
+    # pictures is larger than any JSON body will ever be. It gets its own
+    # ceiling on its one path instead of raising the ceiling for every route.
+    ceiling = (
+        settings.ai_max_spec_bytes
+        if request.url.path == SPEC_UPLOAD_PATH
+        else settings.max_body_bytes
+    )
     length = request.headers.get("content-length")
-    if length and length.isdigit() and int(length) > get_settings().max_body_bytes:
+    if length and length.isdigit() and int(length) > ceiling:
         return JSONResponse(status_code=413, content={"detail": "body_too_large"})
     return await call_next(request)
 

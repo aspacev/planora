@@ -324,7 +324,7 @@ Not every constant deserves a setting. Here a setting would do harm:
 - **The order of the AI's steps and the gates between them.** The ability to switch the gates off destroys the product's main principle.
 - **The "the deviation is measured from the baseline plan" rule.** It must not be made configurable: the ability to measure from the previous value is a hole through which shifts accumulate unnoticed rather than an alternative working mode.
 - **The category colour palette, the progress step, the chart's sizes and scale.** Styling and interface state; the scale lives in the user's browser rather than on the server.
-- **The list of mandatory interview topics** lies in a configuration file next to the application (`config/intake_topics.yml`) rather than in the database: it will be edited by whoever deploys rather than by a user. Moving it into the organization's settings is for when there is demand for industry intake templates.
+- **The list of mandatory interview topics** lies in a configuration file next to the application (`backend/app/ai/intake_topics.yml`) rather than in the database: it will be edited by whoever deploys rather than by a user. Moving it into the organization's settings is for when there is demand for industry intake templates.
 
 ## 11. Architecture and deployment
 

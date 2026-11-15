@@ -4,6 +4,11 @@
 # whoever deploys will edit it, not the end user. Moving it into organization
 # settings is for when there is demand for industry-specific intake templates.
 #
+# It lives inside backend/app on purpose: the Docker image is built from
+# backend/ and the Vercel function bundles backend/app/**, so a file at the
+# repository root reached neither of them and the interview silently ran
+# without its mandatory topics.
+#
 # key    — machine key of the topic; the model marks covered topics by it;
 # prompt — a hint to the model about what to ask, in the development language.
 #          The model phrases the question for a human itself, in the session's

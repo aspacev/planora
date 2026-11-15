@@ -267,6 +267,11 @@
     "export_too_large": "Layihə bir faylda ixrac etmək üçün çox böyükdür",
     "ai_rate_limited": "AI-yə həddindən çox sorğu — bir dəqiqədən sonra yenidən cəhd edin",
     "ai_budget_exhausted": "Bu təşkilatın AI büdcəsi hələlik tükənib",
+    "spec_unsupported_format": "Bu format oxunmur. Faylı .docx, .pdf və ya .txt kimi saxlayın — və ya mətni yapışdırın",
+    "spec_unreadable": "Faylı oxumaq mümkün olmadı: zədələnib və ya parolla qorunur",
+    "spec_empty": "Faylda mətn yoxdur. Skandırsa, mətni əl ilə yapışdırın",
+    "spec_too_long": "Texniki tapşırıq çox uzundur. Tələblər olan bölmələri saxlayın",
+    "body_too_large": "Fayl çox böyükdür",
     "share_link_exists": "Bu layihənin ictimai keçidi artıq var",
     "unknown_risk": "Naməlum risk bayrağı",
     "unknown_operation": "Naməlum əməliyyat",
@@ -929,6 +934,17 @@
     "enough": "Bəsdir, generasiya et",
     "progress": "Sual: {asked}. Token: {tokens}",
     "not_configured": "LLM qoşulmayıb: açar təşkilat parametrlərində göstərilir",
+    "spec": {
+      "title": "Və ya texniki tapşırıqdan başlayın",
+      "hint": "Fayl yükləyin (.docx, .pdf, .txt, .md) və ya mətni yapışdırın. Sahədəki mətni yoxlayın: model məhz onu oxuyacaq",
+      "file": "Texniki tapşırıq faylı",
+      "text": "Texniki tapşırığın mətni",
+      "reading": "Fayl oxunur…",
+      "count": "Simvol: {chars} / {limit}",
+      "too_long": "Simvol: {chars} / {limit}. Mətni qısaldın — tələblər olan bölmələri saxlayın",
+      "start": "Texniki tapşırığı emal et",
+      "interview_hint": "Suallar yalnız texniki tapşırıqda olmayanlar barədədir. Hər şey təsvir olunubsa, «Bəsdir, generasiya et» düyməsini basın"
+    },
     "summary": {
       "title": "Anladıqlarım",
       "hint": "Səhv anlaşılanı burada düzəltmək ən ucuzdur — yüz səhv tapşırığa çevrilməmişdən əvvəl",
@@ -943,7 +959,15 @@
       "task_duration": "«{name}» müddəti",
       "drop": "Sil",
       "project_name": "Layihənin adı",
-      "apply": "Layihəyə tətbiq et"
+      "apply": "Layihəyə tətbiq et",
+      "trace_title": "Xülasə ilə tutuşdurma",
+      "trace_clean": "Bütün tezislər nəzərə alınıb, hər tapşırığın mənbə tezisi var",
+      "trace_gaps": "Planı yoxlayın. Tapşırığı olmayan tezislər: {uncovered}. Tezisi olmayan tapşırıqlar: {unsourced}",
+      "thesis_covered": "tapşırıqlar var",
+      "thesis_context": "kontekst, tapşırıq lazım deyil",
+      "thesis_uncovered": "tapşırıq yoxdur",
+      "task_sources": "Tezislər: {numbers}",
+      "task_unsourced": "Tezis yoxdur"
     }
   },
   "jira": {

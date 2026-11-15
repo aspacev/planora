@@ -43,6 +43,11 @@ class NextQuestion(BaseModel):
 
 # --- step 2: the summary -----------------------------------------------------
 
+#: The ceiling on summary points. It was 40 while a summary came from a dozen
+#: interview answers; a specification of a few pages names more requirements
+#: than that, and each must stay a point of its own to be traceable to a task.
+MAX_THESES = 100
+
 SUMMARY_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -57,7 +62,7 @@ class Summary(BaseModel):
     following prompt, inflating the token bill."""
     model_config = ConfigDict(extra="ignore")
 
-    theses: list[str] = Field(min_length=1, max_length=40)
+    theses: list[str] = Field(min_length=1, max_length=MAX_THESES)
 
     @field_validator("theses", mode="after")
     @classmethod
@@ -74,8 +79,12 @@ class Summary(BaseModel):
 DRAFT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["categories"],
+    "required": ["categories", "context_theses"],
     "properties": {
+        # Summary points that need no task of their own: a constraint, an
+        # exclusion, a fact. Without this list "every point has a task" would
+        # push the model into inventing a task for "the budget is fixed".
+        "context_theses": {"type": "array", "items": {"type": "integer", "minimum": 1}},
         "categories": {
             "type": "array",
             "items": {
@@ -89,9 +98,17 @@ DRAFT_SCHEMA = {
                         "items": {
                             "type": "object",
                             "additionalProperties": False,
-                            "required": ["name", "start_date", "duration_days"],
+                            "required": ["name", "start_date", "duration_days", "sources"],
                             "properties": {
                                 "name": {"type": "string"},
+                                # The numbers of the summary points the task
+                                # follows from. Required of the model, so that a
+                                # task with no origin is an explicit empty list
+                                # rather than a field it forgot.
+                                "sources": {
+                                    "type": "array",
+                                    "items": {"type": "integer", "minimum": 1},
+                                },
                                 "description": {"type": "string"},
                                 "start_date": {"type": "string"},
                                 "duration_days": {"type": "integer", "minimum": 1},
@@ -117,6 +134,10 @@ class DraftTask(BaseModel):
     start_date: date
     duration_days: int = Field(ge=1, le=3650)
     criticality: Criticality = Criticality.NORMAL
+    # Optional here although the request schema demands it: a draft edited by
+    # hand, and a draft stored before references existed, must still parse. A
+    # missing list means "no origin", and coverage reports it as such.
+    sources: list[int] = Field(default_factory=list, max_length=MAX_THESES)
 
     @field_validator("description", mode="after")
     @classmethod
@@ -141,6 +162,7 @@ class Draft(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     categories: list[DraftCategory] = Field(min_length=1, max_length=50)
+    context_theses: list[int] = Field(default_factory=list, max_length=MAX_THESES)
 
 
 # --- the "split a task" step -------------------------------------------------

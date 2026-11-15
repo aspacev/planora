@@ -1,19 +1,22 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
   AI_CREDENTIAL_QUERY_KEY,
+  AI_LIMITS_QUERY_KEY,
   answerQuestion,
   applySession,
   buildDraft,
   buildSummary,
   editDraft,
   editSummary,
+  extractSpec,
   readCredential,
+  readLimits,
   startSession,
 } from "../api/ai";
-import type { AiSession, Draft } from "../api/ai";
+import type { AiSession, Draft, DraftCoverage } from "../api/ai";
 import { errorKey } from "../api/errors";
 import { useLocale } from "../i18n/LocaleProvider";
 
@@ -36,7 +39,19 @@ export function AiIntake() {
     retry: false,
   });
 
-  const start = useMutation({ mutationFn: () => startSession(locale), onSuccess: setSession });
+  // The ceilings of a specification. Without them the screen still works: the server refuses
+  // what is over, the screen just cannot say so before sending.
+  const limits = useQuery({ queryKey: AI_LIMITS_QUERY_KEY, queryFn: readLimits, retry: false });
+
+  const start = useMutation({
+    mutationFn: (spec: string) => startSession(locale, spec),
+    onSuccess: setSession,
+  });
+  const [spec, setSpec] = useState("");
+  const readFile = useMutation({
+    mutationFn: (file: File) => extractSpec(file, limits.data?.spec_max_bytes),
+    onSuccess: (result) => setSpec(result.text),
+  });
   const reply = useMutation({
     mutationFn: (text: string) => answerQuestion(session!.id, text),
     onSuccess: (next) => {
@@ -63,6 +78,7 @@ export function AiIntake() {
   });
 
   const failure =
+    readFile.error ??
     start.error ??
     reply.error ??
     summarize.error ??
@@ -103,9 +119,18 @@ export function AiIntake() {
       {session === null && (
         <>
           <p className="muted">{t("ai.intro")}</p>
-          <button type="button" onClick={() => start.mutate()} disabled={start.isPending}>
+          <button type="button" onClick={() => start.mutate("")} disabled={start.isPending}>
             {t("ai.start")}
           </button>
+          <SpecStart
+            text={spec}
+            maxChars={limits.data?.spec_max_chars}
+            reading={readFile.isPending}
+            pending={start.isPending}
+            onText={setSpec}
+            onFile={(file) => readFile.mutate(file)}
+            onStart={() => start.mutate(spec.trim())}
+          />
         </>
       )}
 
@@ -113,6 +138,7 @@ export function AiIntake() {
         <section className="settings">
           {/* The questions come one at a time: a list of twelve fields turns an interview into a
               questionnaire that gets filled in without reading. */}
+          {session.spec_chars > 0 && <p className="muted">{t("ai.spec.interview_hint")}</p>}
           <p className="ai__question">{question?.question}</p>
           <p className="field">
             <label htmlFor="ai-answer">{t("ai.answer")}</label>
@@ -164,12 +190,92 @@ export function AiIntake() {
       {session !== null && session.status === "draft" && (
         <DraftGate
           draft={session.draft as Draft}
+          theses={session.summary}
+          coverage={session.coverage}
           pending={apply.isPending || saveDraft.isPending}
           onSave={(next) => saveDraft.mutate(next)}
           onApply={(name) => apply.mutate(name)}
         />
       )}
     </main>
+  );
+}
+
+/**
+ * Starting from a specification instead of from an empty interview.
+ *
+ * The file is not sent to the model: it is turned into text, and the text lands in a field. What
+ * the person sees in the field is exactly what the model will read — a scanned PDF gives nothing,
+ * a table gives a column of cells, and both have to be visible before the plan is built on them.
+ * The same field takes pasted text, so a format the server cannot read is still one paste away.
+ */
+function SpecStart({
+  text,
+  maxChars,
+  reading,
+  pending,
+  onText,
+  onFile,
+  onStart,
+}: {
+  text: string;
+  maxChars: number | undefined;
+  reading: boolean;
+  pending: boolean;
+  onText: (text: string) => void;
+  onFile: (file: File) => void;
+  onStart: () => void;
+}) {
+  const { t } = useLocale();
+  const picker = useRef<HTMLInputElement>(null);
+  const chars = text.trim().length;
+  const tooLong = maxChars !== undefined && chars > maxChars;
+
+  return (
+    <section className="settings ai__spec" aria-labelledby="ai-spec-title">
+      <h2 id="ai-spec-title">{t("ai.spec.title")}</h2>
+      <p className="muted">{t("ai.spec.hint")}</p>
+      <p className="field">
+        <label htmlFor="ai-spec-file">{t("ai.spec.file")}</label>
+        <input
+          ref={picker}
+          id="ai-spec-file"
+          name="ai-spec-file"
+          type="file"
+          accept=".docx,.pdf,.txt,.md"
+          disabled={reading}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onFile(file);
+            // Cleared so that picking the same file again — after fixing it — fires a change.
+            if (picker.current) picker.current.value = "";
+          }}
+        />
+      </p>
+      <p className="field">
+        <label htmlFor="ai-spec-text">{t("ai.spec.text")}</label>
+        <textarea
+          id="ai-spec-text"
+          name="ai-spec-text"
+          rows={12}
+          value={text}
+          onChange={(event) => onText(event.target.value)}
+        />
+      </p>
+      {reading && (
+        <p className="muted" role="status">
+          {t("ai.spec.reading")}
+        </p>
+      )}
+      {chars > 0 && maxChars !== undefined && (
+        <p className={tooLong ? "error" : "muted"}>
+          {t(tooLong ? "ai.spec.too_long" : "ai.spec.count", { chars, limit: maxChars })}
+        </p>
+      )}
+      <button type="button" onClick={onStart} disabled={chars === 0 || tooLong || pending || reading}>
+        {t("ai.spec.start")}
+      </button>
+    </section>
   );
 }
 
@@ -216,11 +322,15 @@ function SummaryGate({
 /** Gate 2: the draft is edited whole, and nothing has been written into the project. */
 function DraftGate({
   draft,
+  theses,
+  coverage,
   pending,
   onSave,
   onApply,
 }: {
   draft: Draft;
+  theses: string[];
+  coverage: DraftCoverage | null;
   pending: boolean;
   onSave: (draft: Draft) => void;
   onApply: (name: string) => void;
@@ -272,6 +382,8 @@ function DraftGate({
       <h2>{t("ai.draft.title")}</h2>
       <p className="muted">{t("ai.draft.hint")}</p>
 
+      {coverage !== null && <DraftTrace theses={theses} coverage={coverage} draft={work} />}
+
       {/* The key is a number rather than a name: the names are given to the categories by the model,
           and nothing stops two of them from coinciding; the edits, meanwhile, are addressed by number. */}
       {work.categories?.map((category, categoryIndex) => (
@@ -316,6 +428,7 @@ function DraftGate({
                 >
                   {t("ai.draft.drop")}
                 </button>
+                <TaskOrigin sources={task.sources ?? []} theses={theses} />
               </li>
             ))}
           </ul>
@@ -339,6 +452,86 @@ function DraftGate({
       >
         {t("ai.draft.apply")}
       </button>
+    </section>
+  );
+}
+
+/**
+ * Where a task came from: the numbers of the summary points behind it.
+ *
+ * Read from the task itself rather than from the server's list of unsourced tasks: that list
+ * addresses tasks by position, and between a deletion and the server's answer to it the positions
+ * on screen and in the list differ by one — the warning would sit on the neighbouring row.
+ */
+function TaskOrigin({ sources, theses }: { sources: number[]; theses: string[] }) {
+  const { t } = useLocale();
+
+  if (sources.length === 0) {
+    return <span className="ai__origin ai__origin--missing">{t("ai.draft.task_unsourced")}</span>;
+  }
+  return (
+    // The full text of the points is in the tooltip: a number alone sends the eyes up the page.
+    <span
+      className="ai__origin"
+      title={sources.map((number) => `${number}. ${theses[number - 1] ?? ""}`).join("\n")}
+    >
+      {t("ai.draft.task_sources", { numbers: sources.join(", ") })}
+    </span>
+  );
+}
+
+/**
+ * The draft checked against the summary: which points got a task, which were set aside as context,
+ * and which the plan lost.
+ *
+ * It stands above the tasks because it answers the first question a person has about a generated
+ * plan — "is everything I said in here?" — and that question is not answerable by reading forty rows.
+ */
+function DraftTrace({
+  theses,
+  coverage,
+  draft,
+}: {
+  theses: string[];
+  coverage: DraftCoverage;
+  draft: Draft;
+}) {
+  const { t } = useLocale();
+  const unsourced = (draft.categories ?? []).reduce(
+    (count, category) =>
+      count + category.tasks.filter((task) => (task.sources ?? []).length === 0).length,
+    0,
+  );
+  const clean = coverage.uncovered.length === 0 && unsourced === 0;
+
+  const state = (number: number) => {
+    if (coverage.uncovered.includes(number)) return "uncovered";
+    if (coverage.context.includes(number)) return "context";
+    return "covered";
+  };
+
+  return (
+    <section className="ai__trace" aria-labelledby="ai-trace-title">
+      <h3 id="ai-trace-title">{t("ai.draft.trace_title")}</h3>
+      {/* A status rather than an alert: gaps do not block applying, a person may know better than
+          the check — but they must not be able to miss them. */}
+      <p className={clean ? "muted" : "ai__trace-gaps"} role="status">
+        {clean
+          ? t("ai.draft.trace_clean")
+          : t("ai.draft.trace_gaps", { uncovered: coverage.uncovered.length, unsourced })}
+      </p>
+      <ol className="ai__theses">
+        {theses.map((thesis, index) => {
+          const kind = state(index + 1);
+          return (
+            <li key={index} className={`ai__thesis ai__thesis--${kind}`}>
+              {/* The thesis is content in the session's language and is not translated. */}
+              <span>{thesis}</span>
+              <span className={`ai__mark ai__mark--${kind}`}>{t(`ai.draft.thesis_${kind}`)}</span>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

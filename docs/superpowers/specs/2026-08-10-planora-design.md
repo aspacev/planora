@@ -391,9 +391,7 @@ Recorded explicitly so as not to come back to the arguments: an AI session insid
 > list also predates two entire subsystems that shipped later and aren't
 > mentioned anywhere in this spec: the Proposal/quoting module
 > (`backend/app/proposals.py`) and the weekly Scorecard health dashboard
-> (`backend/app/scorecard.py`) — plus the Jira import/sync integration
-> (`backend/app/jira/`), which is a new external-service connection this
-> spec doesn't anticipate at all. Resource/workload balancing, billing,
+> (`backend/app/scorecard.py`). Resource/workload balancing, billing,
 > OG previews, MS Project/Excel export, a mobile app, and collaborative
 > cursors are still out of scope as of this writing.
 

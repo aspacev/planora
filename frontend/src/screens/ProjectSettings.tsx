@@ -1,10 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { errorKey } from "../api/errors";
-import { jiraLinkQueryKey, pushToJira, readJiraLink, syncFromJira } from "../api/jira";
-import type { JiraPushFailure } from "../api/jira";
 import { ORG_QUERY_KEY, organization } from "../api/org";
 import {
   checkProjectSlug,
@@ -18,12 +16,9 @@ import { SaveMark, TextField, ValueField, useFieldSaves } from "../components/au
 import type { FieldSave } from "../components/autosave";
 import { ConfirmAction } from "../components/ConfirmAction";
 import { Switch } from "../components/Switch";
-import { useToast } from "../components/toast";
-import { formatDate, formatTime } from "../i18n/dates";
 import { useLocale } from "../i18n/LocaleProvider";
 import { SharePanel } from "../project/SharePanel";
 import { useDeleteProject } from "../project/useDeleteProject";
-import { browserTimeZone, dayIn } from "../time/zone";
 import {
   DateListField,
   SlugField,
@@ -278,10 +273,6 @@ export function ProjectSettings() {
           onCommit={(workdays_extra) => saves.commit("project-workdays", { workdays_extra })}
         />
 
-        {/* Jira appears only on a project created by import: on an ordinary
-            project there is simply nothing to fill this panel with. */}
-        <JiraSyncPanel projectId={projectId} readOnly={readOnly} />
-
         {/* The public link comes as the last block: it is not a computation
             setting but a decision to show the project outside. */}
         {!readOnly && <SharePanel projectId={projectId} />}
@@ -368,112 +359,6 @@ function Override({
           inherited that is the checkbox itself, and after that the field shows it.
           Otherwise nobody would report a return to inheritance. */}
       {inherits ? <SaveMark save={save} /> : render(overridden, onOverride, Boolean(disabled), save)}
-    </div>
-  );
-}
-
-/**
- * Synchronization with Jira — only on a project created by import.
- *
- * Stays silent (draws nothing) if the project is an ordinary one: an empty panel
- * saying "not linked" would answer a question nobody asked — an ordinary project
- * simply has no relation to Jira.
- */
-function JiraSyncPanel({ projectId, readOnly }: { projectId: string; readOnly: boolean }) {
-  const { t, locale } = useLocale();
-  const queryClient = useQueryClient();
-  // The day and the time next to each other must be counted by one clock: the time
-  // is by the machine's clock (see formatTime), and the day is taken from it too
-  // rather than by truncating an ISO string in UTC, otherwise a night-time sync
-  // would be dated yesterday next to today's time.
-  const zone = browserTimeZone();
-  const showToast = useToast();
-  // Submission refusals stay on the panel rather than only in a toast: a toast
-  // disappears, while the list of rejected Jira tasks is something a person needs
-  // to resolve rather than simply read once.
-  const [pushFailures, setPushFailures] = useState<JiraPushFailure[]>([]);
-
-  const link = useQuery({
-    queryKey: jiraLinkQueryKey(projectId),
-    queryFn: () => readJiraLink(projectId),
-    retry: false,
-  });
-
-  const sync = useMutation({
-    mutationFn: () => syncFromJira(projectId),
-    onSuccess: (result) => {
-      // The revisions were applied in the database — the project's state (the
-      // tasks, the chart, the scorecard) reads it anew rather than patching over
-      // the cache: any number of rows could have appeared, and computing the
-      // difference on the client means repeating what the server has already computed.
-      void queryClient.invalidateQueries({ queryKey: projectQueryKey(projectId) });
-      queryClient.setQueryData(jiraLinkQueryKey(projectId), {
-        ...link.data,
-        last_synced_at: new Date().toISOString(),
-      });
-      showToast({
-        message: t("jira.sync.result", {
-          createdTasks: result.created_tasks,
-          updatedTasks: result.updated_tasks,
-        }),
-      });
-    },
-  });
-
-  const push = useMutation({
-    mutationFn: () => pushToJira(projectId),
-    onSuccess: (result) => {
-      setPushFailures(result.failed);
-      showToast({
-        message: t(
-          result.failed.length > 0 ? "jira.push.result_with_failures" : "jira.push.result",
-          { pushed: result.pushed, unchanged: result.unchanged, failed: result.failed.length },
-        ),
-      });
-    },
-  });
-
-  if (!link.data?.linked) return null;
-
-  return (
-    <div className="settings__fieldset">
-      <h2>{t("jira.sync.title")}</h2>
-      <p className="muted">{t("jira.sync.hint", { key: link.data.jira_project_key ?? "" })}</p>
-      <p className="muted">
-        {link.data.last_synced_at
-          ? t("jira.sync.last_synced", {
-              date: `${formatDate(t, dayIn(zone, new Date(link.data.last_synced_at)))} · ${formatTime(locale, new Date(link.data.last_synced_at))}`,
-            })
-          : t("jira.sync.never")}
-      </p>
-
-      {sync.error !== null && (
-        <p className="error" role="alert">
-          {t(errorKey(sync.error))}
-        </p>
-      )}
-
-      <button type="button" disabled={readOnly || sync.isPending} onClick={() => sync.mutate()}>
-        {t("jira.sync.button")}
-      </button>
-
-      <p className="muted">{t("jira.push.hint")}</p>
-
-      {push.error !== null && (
-        <p className="error" role="alert">
-          {t(errorKey(push.error))}
-        </p>
-      )}
-
-      {pushFailures.length > 0 && (
-        <p className="error" role="alert">
-          {t("jira.push.failures", { keys: pushFailures.map((f) => f.issue_key).join(", ") })}
-        </p>
-      )}
-
-      <button type="button" disabled={readOnly || push.isPending} onClick={() => push.mutate()}>
-        {t("jira.push.button")}
-      </button>
     </div>
   );
 }

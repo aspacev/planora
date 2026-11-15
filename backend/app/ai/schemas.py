@@ -18,12 +18,15 @@ bound therefore lives in the Pydantic models below, where it holds for every
 provider alike; a range the model should know about goes into `description`.
 """
 
+import logging
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.config import get_settings
 from app.models import Criticality
+
+logger = logging.getLogger(__name__)
 
 # --- step 1: the next question -----------------------------------------------
 
@@ -45,7 +48,15 @@ QUESTION_SCHEMA = {
 class NextQuestion(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    question: str = Field(min_length=1)
+    # An empty question is an answer, not a malformed one: it is how the model
+    # says there is nothing left to ask. Demanding a non-empty string made a
+    # model that had read a complete specification either invent a question or
+    # fail the schema — and the second reached the person as "the model answered
+    # off-schema" at the very moment the interview was simply over.
+    #
+    # Still required: an answer with no `question` at all is garbage, not a
+    # decision to stop, and must fail like any other.
+    question: str
     covered_topics: list[str] = Field(default_factory=list)
 
 
@@ -232,4 +243,13 @@ def parse(model: type[BaseModel], payload: dict):
     try:
         return model.model_validate(payload)
     except ValidationError as error:
+        # Where the answer broke the schema, for the server's log: the person
+        # sees one code for all of it, and without this line there is no telling
+        # "too many summary points" from "a date that is not a date". Field
+        # paths and error types only — the values are the user's project.
+        logger.warning(
+            "model answer failed %s validation: %s",
+            model.__name__,
+            [(".".join(str(part) for part in item["loc"]), item["type"]) for item in error.errors()[:10]],
+        )
         raise LlmError("llm_schema_mismatch", f"ответ не по схеме: {error.error_count()} ошибок")

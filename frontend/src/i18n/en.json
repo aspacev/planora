@@ -906,6 +906,8 @@
     "answer": "Your answer",
     "reply": "Answer",
     "enough": "Enough, generate",
+    "interview_done": "No more questions",
+    "to_summary": "Go to the summary",
     "progress": "Questions: {asked}. Tokens: {tokens}",
     "not_configured": "No LLM is connected: the key is set in the organization settings",
     "spec": {

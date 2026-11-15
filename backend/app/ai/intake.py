@@ -195,12 +195,16 @@ def start(
     return session
 
 
-def ask(db: DbSession, session: AiSession, provider: LlmProvider) -> str:
-    """The next question.
+def ask(db: DbSession, session: AiSession, provider: LlmProvider) -> str | None:
+    """The next question — or `None` when the model has nothing left to ask.
 
     The hard ceiling on questions lives here: without it the model clarifies
     endlessly. Having reached the ceiling, the session moves on to the summary by
     itself — that is not a refusal but a move to the next step.
+
+    "Nothing left to ask" is the model's call as well as the topic list's: a
+    specification can answer everything the topics name, and a model forced to
+    produce a question then asks one for the sake of asking.
     """
     if session.status != "interview":
         raise IntakeError("wrong_step", "интервью уже закончено")
@@ -225,11 +229,20 @@ def ask(db: DbSession, session: AiSession, provider: LlmProvider) -> str:
             "Спрашивай только то, на что ТЗ не отвечает. Темы, которые ТЗ уже "
             "закрывает, сразу перечисли в covered_topics. " + instruction
         )
-    instruction = rules("interview") + instruction
+    instruction = (
+        rules("interview")
+        + instruction
+        + " Если спрашивать больше нечего, верни в question пустую строку."
+    )
 
     messages = [*_history(session), {"role": "user", "content": instruction}]
 
     answer = parse(NextQuestion, _generate(session, provider, messages, QUESTION_SCHEMA))
+    if not answer.question.strip():
+        # No turn is added: a turn is a question awaiting an answer, and there is
+        # none. The screen reads "the last turn is answered, or there are no
+        # turns" as "the interview is over" and offers the summary.
+        return None
     # Covered topics arrive together with the question and are remembered:
     # without this the remaining topics never shrink, and the interview hits the
     # ceiling instead of ending when there is nothing left to find out.
@@ -278,11 +291,45 @@ def make_summary(db: DbSession, session: AiSession, provider: LlmProvider) -> li
             f"Не больше {MAX_THESES} тезисов.",
         }
     )
-    result = parse(Summary, _generate(session, provider, messages, SUMMARY_SCHEMA))
-    session.summary = result.theses
-    session.status = "summary"
-    db.flush()
-    return result.theses
+    # The same allowance as the draft: a summary that broke the schema is asked
+    # for again rather than handed to the person as an error. It used to be one
+    # attempt, which was enough while a summary was a dozen points from an
+    # interview; a long specification is where the model overshoots the ceiling.
+    request = messages
+    attempts = get_settings().ai_schema_retries + 1
+    last: LlmError | None = None
+    for _ in range(attempts):
+        count = 0
+        try:
+            payload = _generate(session, provider, messages, SUMMARY_SCHEMA)
+            if isinstance(payload, dict) and isinstance(payload.get("theses"), list):
+                count = len(payload["theses"])
+            result = parse(Summary, payload)
+        except LlmError as error:
+            last = error
+            if error.code not in {"llm_schema_mismatch", "llm_bad_json"}:
+                raise
+            if count > MAX_THESES:
+                # Named, as with the draft's gaps: "try again" gets the same
+                # list back, the number gets a shorter one.
+                messages = [
+                    *request,
+                    {
+                        "role": "user",
+                        "content": (
+                            f"В прошлом ответе {count} тезисов, а нужно не больше "
+                            f"{MAX_THESES}. Оставь все требования к объёму работ, а "
+                            "подробности одного и того же требования собери в один тезис."
+                        ),
+                    },
+                ]
+            continue
+        session.summary = result.theses
+        session.status = "summary"
+        db.flush()
+        return result.theses
+
+    raise last
 
 
 def edit_summary(db: DbSession, session: AiSession, theses: list[str]) -> list[str]:

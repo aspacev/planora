@@ -672,6 +672,61 @@ def test_the_config_files_ship_inside_the_backend_package():
         assert package in path.parents
 
 
+def test_request_schemas_carry_no_value_constraints():
+    """A provider's strict mode refuses, with a 400, a schema keyword outside its subset.
+
+    Claude's OpenAI-compatible endpoint rejects `minimum` and its relatives; the
+    bounds are enforced by the Pydantic models instead, so nothing is lost by
+    keeping them out of what is sent.
+    """
+    from app.ai import schemas
+
+    refused = {
+        "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+        "minLength", "maxLength", "pattern", "minItems", "maxItems", "uniqueItems",
+    }
+
+    def keywords(node) -> set[str]:
+        if isinstance(node, dict):
+            # The keys of `properties` are field names, not schema keywords.
+            found = set(node) - {"properties"}
+            for key, value in node.items():
+                found |= (
+                    set().union(*map(keywords, value.values()))
+                    if key == "properties"
+                    else keywords(value)
+                )
+            return found
+        if isinstance(node, list):
+            return set().union(*map(keywords, node)) if node else set()
+        return set()
+
+    for schema in (
+        schemas.QUESTION_SCHEMA,
+        schemas.SUMMARY_SCHEMA,
+        schemas.DRAFT_SCHEMA,
+        schemas.SPLIT_SCHEMA,
+    ):
+        assert not (keywords(schema) & refused)
+        # Strict mode also demands that every object closes itself.
+        assert schema["additionalProperties"] is False
+
+
+def test_a_duration_below_one_day_is_still_refused_by_our_own_check(db, org, user, monkeypatch):
+    """The bound left the request schema, not the product."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 0, raising=False)
+    zero_days = _draft({"name": "Вёрстка", "sources": [1], "duration_days": 0})
+    provider = RecordedProvider([QUESTION, SUMMARY, zero_days])
+    session = _at_the_summary(db, org, user, provider)
+
+    with pytest.raises(LlmError) as error:
+        intake.make_draft(db, session, provider)
+
+    assert error.value.code == "llm_schema_mismatch"
+
+
 def test_topics_are_read_from_the_config_file():
     """The list of mandatory topics is a file next to the application rather than a table in the database."""
     keys = {topic["key"] for topic in intake.topics()}

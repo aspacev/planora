@@ -151,6 +151,17 @@ const PLAIN_CODES = new Set([
   // false promise.
   "ai_rate_limited",
   "ai_budget_exhausted",
+  // The requirements document. Each refusal names what is wrong with the file, because
+  // each is fixed differently: a scan is retyped, a locked file is unlocked, a long one
+  // is cut down.
+  "document_too_large",
+  "document_type_unsupported",
+  "document_unreadable",
+  "document_no_text",
+  "document_too_long",
+  "document_not_found",
+  "requirements_empty",
+  "invalid_project_type",
   // A project has one public link: a repeat "share" is not a breakage but an answer of
   // "there already is one".
   "share_link_exists",

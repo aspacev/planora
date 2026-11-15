@@ -1923,6 +1923,93 @@ input[type="checkbox"] {
   letter-spacing: -0.01em;
 }
 
+/* A draft task's reference to the document's clauses: a quiet remark in the row,
+   never wrapped — a reference broken across two lines reads as two references. */
+.ai__source {
+  flex: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* "Not in the plan": the requirements no task refers to. Set apart from the draft
+   by a rule rather than a box — it is a remark about the draft, not a part of it. */
+.ai__uncovered {
+  margin-top: var(--space-16);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border);
+}
+
+.ai__uncovered h3 {
+  margin: 0 0 var(--space-4);
+  font-size: 14px;
+}
+
+.ai__uncovered ul {
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-20);
+}
+
+.ai__uncovered li + li {
+  margin-top: var(--space-4);
+}
+
+/* The requirements gate: a numbered list of two fields a row — the clause (short)
+   and the wording (takes the rest). */
+.ai__requirements {
+  display: grid;
+  gap: var(--space-8);
+  margin: var(--space-12) 0;
+  padding-left: var(--space-24);
+}
+
+.ai__requirement::marker {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* A grid on a wrapper inside the list item would lose the marker; the item itself
+   stays a list item and lays its children out inline. */
+.ai__requirement > * {
+  vertical-align: middle;
+}
+
+.ai__requirement-section {
+  width: 96px;
+  margin-right: var(--space-8);
+}
+
+.ai__requirement-text {
+  width: min(560px, calc(100% - 220px));
+  margin-right: var(--space-8);
+}
+
+/* --- the project's source document --- */
+
+.source-document {
+  margin-top: var(--space-24);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--border);
+}
+
+.source-document h2 {
+  margin: 0 0 var(--space-8);
+  font-size: 15px;
+}
+
+.source-document__name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.source-document__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
 /* --- the organization switcher --- */
 
 /* It stands under the organization's name in the sidebar and looks like its

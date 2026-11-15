@@ -57,6 +57,16 @@ class Action(StrEnum):
     # are seen by the whole team, the viewer included; a client and a link-holding
     # guest look at the plan, not at how each contributor is coping.
     TEAM_PACE_READ = "team_pace_read"
+    # The requirements document a project was created from. Closed to a client
+    # and a link-holding guest for the same reason as the proposal: a
+    # requirements document carries internal remarks and prices. A separate
+    # permission rather than PROPOSAL_READ: the two are different things that
+    # happen to be hidden from the same people today.
+    DOCUMENT_READ = "document_read"
+    # Deleting the document takes the file and its text away for good — there
+    # is no journal behind it to undo from. An owner-level decision, like
+    # deleting the project.
+    DOCUMENT_DELETE = "document_delete"
 
 
 _MATRIX: dict[Role | None, frozenset[Action]] = {
@@ -72,6 +82,7 @@ _MATRIX: dict[Role | None, frozenset[Action]] = {
             Action.PROJECT_EXPORT,
             Action.PROPOSAL_READ,
             Action.TEAM_PACE_READ,
+            Action.DOCUMENT_READ,
         }
     ),
     Role.VIEWER: frozenset(
@@ -82,6 +93,7 @@ _MATRIX: dict[Role | None, frozenset[Action]] = {
             Action.PROJECT_EXPORT,
             Action.PROPOSAL_READ,
             Action.TEAM_PACE_READ,
+            Action.DOCUMENT_READ,
         }
     ),
     # A client and a link-holding guest export the client copy: the same trimming

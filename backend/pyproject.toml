@@ -29,6 +29,11 @@ dependencies = [
     # ruled out: it pulls in cairo and pango as system libraries, and the build
     # also runs on Vercel, where those are absent.
     "reportlab>=4.2",
+    # Reading the text of an uploaded requirements document (app/documents.py).
+    # A PDF's text layer sits behind compressed streams and font encodings —
+    # not something to parse by hand. The tests also read the exported PDF with
+    # it.
+    "pypdf>=5.1",
 ]
 
 [dependency-groups]
@@ -37,10 +42,6 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx>=0.27",
     "pytest-cov>=7.1.0",
-    # Reading the produced PDF in tests: it checks that the document contains
-    # the project name and the task name, not merely that the bytes start with
-    # "%PDF".
-    "pypdf>=5.1",
 ]
 
 [tool.pytest.ini_options]

@@ -1250,6 +1250,16 @@
         "title": "ProjectSettingsIn",
         "type": "object"
       },
+      "ProjectType": {
+        "description": "What kind of work a project is — it decides what the intake asks about.\n\nA requirements document for software and a brief for an event leave different\nthings unsaid: the first rarely names the acceptance procedure, the second\nrarely names who approves the spending. The list of topics per type lives in\nconfig/intake_topics.yml; here is only the set of types itself.",
+        "enum": [
+          "software",
+          "event",
+          "general"
+        ],
+        "title": "ProjectType",
+        "type": "string"
+      },
       "ProposalCategoryIn": {
         "properties": {
           "description": {
@@ -2332,6 +2342,45 @@
         "title": "ReissueIn",
         "type": "object"
       },
+      "RequirementIn": {
+        "properties": {
+          "section": {
+            "default": "",
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "RequirementIn",
+        "type": "object"
+      },
+      "RequirementsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "project_type": {
+            "$ref": "#/components/schemas/ProjectType"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/RequirementIn"
+            },
+            "title": "Requirements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_type",
+          "requirements"
+        ],
+        "title": "RequirementsIn",
+        "type": "object"
+      },
       "ResetPasswordIn": {
         "additionalProperties": false,
         "properties": {
@@ -2528,6 +2577,10 @@
               }
             ],
             "title": "Locale"
+          },
+          "project_type": {
+            "$ref": "#/components/schemas/ProjectType",
+            "default": "general"
           }
         },
         "title": "StartIn",
@@ -2871,6 +2924,94 @@
         ]
       }
     },
+    "/api/ai/documents": {
+      "post": {
+        "description": "Accepts a requirements document and opens a session that will read it.\n\nEvery refusal comes before the model is called and before anything is\nstored: an unconfigured connection, a file of the wrong kind, a document\nthat will not fit into what is left of today's token budget. The model is\nnot called here at all — the reading goes part by part in later requests.",
+        "operationId": "upload_document_api_ai_documents_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "filename",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 255,
+              "title": "Filename",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 5,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Locale"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "default": "",
+                "title": "Data",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Document",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/ai/sessions": {
       "post": {
         "operationId": "start_session_api_ai_sessions_post",
@@ -3120,6 +3261,64 @@
         ]
       }
     },
+    "/api/ai/sessions/{session_id}/document/parts": {
+      "post": {
+        "description": "Reads the next part of the document: one request — one model call.\n\nThe page calls this until the status leaves \"reading\". A refusal (the\nper-minute limit, a model failure) leaves the cursor where it was, and the\nsame request continues from the same part.",
+        "operationId": "read_document_part_api_ai_sessions__session_id__document_parts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Document Part",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/ai/sessions/{session_id}/draft": {
       "post": {
         "description": "Gate 2, the main one: the draft. Nothing has been written into the project.",
@@ -3238,6 +3437,190 @@
           }
         },
         "summary": "Edit Draft",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/sessions/{session_id}/questions": {
+      "post": {
+        "description": "The first question after the requirements gate — if there is one to ask.\n\nA session with no open question and nothing left to find out comes back\nunchanged: the page reads that as \"the interview is skipped\" and goes on to\nthe summary. The provider is reached for only when a question will really\nbe asked.",
+        "operationId": "next_question_api_ai_sessions__session_id__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Next Question",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/sessions/{session_id}/requirements": {
+      "put": {
+        "description": "A person's edit of the requirements and of the project type.",
+        "operationId": "edit_requirements_api_ai_sessions__session_id__requirements_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequirementsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Requirements",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/sessions/{session_id}/requirements/confirm": {
+      "post": {
+        "description": "The requirements gate: the type and the list are confirmed, the model\nmarks which interview topics the document already answers.",
+        "operationId": "confirm_requirements_api_ai_sessions__session_id__requirements_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Requirements",
         "tags": [
           "ai"
         ]
@@ -5459,6 +5842,171 @@
         "summary": "Project Comment Counts",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/document": {
+      "delete": {
+        "description": "Removes the file and its text. The tasks and the clause references in\ntheir descriptions stay: they are the plan now, not the document.",
+        "operationId": "delete_document_api_projects__project_id__document_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Document",
+        "tags": [
+          "documents"
+        ]
+      },
+      "get": {
+        "operationId": "read_document_api_projects__project_id__document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/document/file": {
+      "get": {
+        "operationId": "download_document_api_projects__project_id__document_file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "planora_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Planora Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Document",
+        "tags": [
+          "documents"
         ]
       }
     },

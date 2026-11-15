@@ -177,7 +177,22 @@ done, what is out of scope), produces a summary you can edit, drafts categories 
 you can edit, and writes to the project **only when a human clicks apply** — as one
 journaled batch. A per-task *split into subtasks* action follows the same propose-then-apply
 rule. Usage is metered per organization with a per-minute request cap and a daily token
-budget; a model failure never loses the conversation.
+budget; a model failure never loses the conversation. The required topics depend on the
+**project type** — software development, marketing event, or other — chosen before the
+first question.
+
+**From a requirements document.** When the order already comes with a document — a
+specification, a brief, a contract with an appendix — *Create from a brief* takes it instead
+of an interview from scratch. Upload a PDF, DOCX, TXT or MD file (up to 4 MB and 300,000
+characters of text; scans are refused, since only text is read). The model reads it part by
+part into a numbered list of requirements, suggests the project type, and you confirm or
+edit both on one screen. Questions are then asked only about topics the document leaves
+open, and the summary, draft and apply steps are the same as above. Every drafted task shows
+which clauses it comes from — written into its description on apply — and requirements no
+task refers to are listed under *Not in the plan*. The document is stored with the project:
+owners, editors and viewers can download it from the project settings, the owner can delete
+it, and clients and public-link guests never see it. A session can be resumed from its
+address if the tab is closed.
 
 ### Live collaboration
 
@@ -487,7 +502,7 @@ frontend/
     auth/  live/  i18n/  components/  test/
 api/index.py        Vercel ASGI entrypoint
 docker/             backup script, Postgres init
-config/             intake_topics.yml — required AI interview topics
+config/             intake_topics.yml — required AI interview topics, per project type
 docs/               screenshots, design specs, audits, brand assets
 ```
 

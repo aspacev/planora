@@ -15,7 +15,7 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.config import get_settings
-from app.models import Criticality
+from app.models import PROJECT_TYPES, Criticality, ProjectType
 
 # --- step 1: the next question -----------------------------------------------
 
@@ -38,6 +38,100 @@ class NextQuestion(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     question: str = Field(min_length=1)
+    covered_topics: list[str] = Field(default_factory=list)
+
+
+# --- the document: requirements and topic coverage ---------------------------
+
+EXTRACT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["requirements", "project_type", "brief"],
+    "properties": {
+        "requirements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["section", "text"],
+                "properties": {
+                    # The clause of the document the requirement comes from —
+                    # "3.2", or a heading where the document has no numbering.
+                    "section": {"type": "string"},
+                    "text": {"type": "string"},
+                },
+            },
+        },
+        "project_type": {"type": "string", "enum": list(PROJECT_TYPES)},
+        "brief": {"type": "string"},
+    },
+}
+
+
+class Requirement(BaseModel):
+    """One thing the document asks for.
+
+    The caps are the same kind of fuse as on the summary: the list rides along
+    in every later prompt, and both the model and a person editing it can send
+    a wall of text.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    section: str = Field(default="", max_length=120)
+    text: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("section", "text", mode="before")
+    @classmethod
+    def _trimmed(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+#: The ceiling on the whole list. A document of three hundred thousand
+#: characters does not hold more distinct requirements than this; a list longer
+#: than this is the model repeating itself.
+MAX_REQUIREMENTS = 400
+
+
+class ExtractedPart(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    requirements: list[Requirement] = Field(default_factory=list, max_length=MAX_REQUIREMENTS)
+    project_type: ProjectType = ProjectType.GENERAL
+    brief: str = Field(default="", max_length=600)
+
+    @field_validator("project_type", mode="before")
+    @classmethod
+    def _known_type(cls, value):
+        # A type outside the list is not a reason to throw the whole part away:
+        # the type is only a suggestion a person confirms on the next screen.
+        return value if value in PROJECT_TYPES else ProjectType.GENERAL
+
+    @field_validator("brief", mode="before")
+    @classmethod
+    def _brief_within_limit(cls, value):
+        return value.strip()[:600] if isinstance(value, str) else value
+
+
+class RequirementList(BaseModel):
+    """A person's edit of the list — validated like the model's answer."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    requirements: list[Requirement] = Field(max_length=MAX_REQUIREMENTS)
+
+
+COVERAGE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["covered_topics"],
+    "properties": {"covered_topics": {"type": "array", "items": {"type": "string"}}},
+}
+
+
+class Coverage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     covered_topics: list[str] = Field(default_factory=list)
 
 
@@ -99,6 +193,13 @@ DRAFT_SCHEMA = {
                                     "type": "string",
                                     "enum": [level.value for level in Criticality],
                                 },
+                                # The numbers of the document's requirements the
+                                # task comes from. Empty for a plain interview and
+                                # for work the document does not mention.
+                                "requirement_ids": {
+                                    "type": "array",
+                                    "items": {"type": "integer"},
+                                },
                             },
                         },
                     },
@@ -117,6 +218,7 @@ class DraftTask(BaseModel):
     start_date: date
     duration_days: int = Field(ge=1, le=3650)
     criticality: Criticality = Criticality.NORMAL
+    requirement_ids: list[int] = Field(default_factory=list, max_length=50)
 
     @field_validator("description", mode="after")
     @classmethod

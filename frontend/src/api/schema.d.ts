@@ -47,6 +47,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Document
+         * @description Accepts a requirements document and opens a session that will read it.
+         *
+         *     Every refusal comes before the model is called and before anything is
+         *     stored: an unconfigured connection, a file of the wrong kind, a document
+         *     that will not fit into what is left of today's token budget. The model is
+         *     not called here at all — the reading goes part by part in later requests.
+         */
+        post: operations["upload_document_api_ai_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/sessions": {
         parameters: {
             query?: never;
@@ -118,6 +143,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/sessions/{session_id}/document/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Document Part
+         * @description Reads the next part of the document: one request — one model call.
+         *
+         *     The page calls this until the status leaves "reading". A refusal (the
+         *     per-minute limit, a model failure) leaves the cursor where it was, and the
+         *     same request continues from the same part.
+         */
+        post: operations["read_document_part_api_ai_sessions__session_id__document_parts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/sessions/{session_id}/draft": {
         parameters: {
             query?: never;
@@ -133,6 +182,72 @@ export interface paths {
          * @description Gate 2, the main one: the draft. Nothing has been written into the project.
          */
         post: operations["build_draft_api_ai_sessions__session_id__draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/sessions/{session_id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Next Question
+         * @description The first question after the requirements gate — if there is one to ask.
+         *
+         *     A session with no open question and nothing left to find out comes back
+         *     unchanged: the page reads that as "the interview is skipped" and goes on to
+         *     the summary. The provider is reached for only when a question will really
+         *     be asked.
+         */
+        post: operations["next_question_api_ai_sessions__session_id__questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/sessions/{session_id}/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit Requirements
+         * @description A person's edit of the requirements and of the project type.
+         */
+        put: operations["edit_requirements_api_ai_sessions__session_id__requirements_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/sessions/{session_id}/requirements/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Requirements
+         * @description The requirements gate: the type and the list are confirmed, the model
+         *     marks which interview topics the document already answers.
+         */
+        post: operations["confirm_requirements_api_ai_sessions__session_id__requirements_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -915,6 +1030,45 @@ export interface paths {
          *     the same socket event.
          */
         get: operations["project_comment_counts_api_projects__project_id__comments_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Document */
+        get: operations["read_document_api_projects__project_id__document_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Document
+         * @description Removes the file and its text. The tasks and the clause references in
+         *     their descriptions stay: they are the plan now, not the document.
+         */
+        delete: operations["delete_document_api_projects__project_id__document_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/document/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Document */
+        get: operations["download_document_api_projects__project_id__document_file_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2098,6 +2252,17 @@ export interface components {
             /** Working Days */
             working_days?: number | null;
         };
+        /**
+         * ProjectType
+         * @description What kind of work a project is — it decides what the intake asks about.
+         *
+         *     A requirements document for software and a brief for an event leave different
+         *     things unsaid: the first rarely names the acceptance procedure, the second
+         *     rarely names who approves the spending. The list of topics per type lives in
+         *     config/intake_topics.yml; here is only the set of types itself.
+         * @enum {string}
+         */
+        ProjectType: "software" | "event" | "general";
         /** ProposalCategoryIn */
         ProposalCategoryIn: {
             /**
@@ -2646,6 +2811,22 @@ export interface components {
              */
             deliver: boolean;
         };
+        /** RequirementIn */
+        RequirementIn: {
+            /**
+             * Section
+             * @default
+             */
+            section: string;
+            /** Text */
+            text: string;
+        };
+        /** RequirementsIn */
+        RequirementsIn: {
+            project_type: components["schemas"]["ProjectType"];
+            /** Requirements */
+            requirements: components["schemas"]["RequirementIn"][];
+        };
         /** ResetPasswordIn */
         ResetPasswordIn: {
             /** New Password */
@@ -2739,6 +2920,8 @@ export interface components {
         StartIn: {
             /** Locale */
             locale?: string | null;
+            /** @default general */
+            project_type: components["schemas"]["ProjectType"];
         };
         /** SummaryIn */
         SummaryIn: {
@@ -2917,6 +3100,44 @@ export interface operations {
             };
         };
     };
+    upload_document_api_ai_documents_post: {
+        parameters: {
+            query?: {
+                filename?: string;
+                locale?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_session_api_ai_sessions_post: {
         parameters: {
             query?: never;
@@ -3059,6 +3280,39 @@ export interface operations {
             };
         };
     };
+    read_document_part_api_ai_sessions__session_id__document_parts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     edit_draft_api_ai_sessions__session_id__draft_put: {
         parameters: {
             query?: never;
@@ -3097,6 +3351,109 @@ export interface operations {
         };
     };
     build_draft_api_ai_sessions__session_id__draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    next_question_api_ai_sessions__session_id__questions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_requirements_api_ai_sessions__session_id__requirements_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_requirements_api_ai_sessions__session_id__requirements_confirm_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4428,6 +4785,103 @@ export interface operations {
         };
     };
     project_comment_counts_api_projects__project_id__comments_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_document_api_projects__project_id__document_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_api_projects__project_id__document_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: {
+                planora_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_document_api_projects__project_id__document_file_get: {
         parameters: {
             query?: never;
             header?: never;

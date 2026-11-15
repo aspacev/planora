@@ -101,6 +101,15 @@ class Settings(BaseSettings):
     #: installation with a local model on its own network.
     ai_allow_private_urls: bool = False
 
+    #: The ceiling on an uploaded requirements document. Four megabytes is what
+    #: a serverless function accepts in a request body at all; the limit is the
+    #: same in every layout so that an installation does not behave differently
+    #: depending on where it runs.
+    max_document_bytes: int = 4_000_000
+    #: The ceiling on the document's text. Every character of it is sent to the
+    #: model once, at the organization's expense.
+    ai_max_document_chars: int = 300_000
+
     max_tasks_per_project: int = 2000
     max_text_len: int = 4000
     #: The ceiling on a request body's size in bytes. An order of magnitude above

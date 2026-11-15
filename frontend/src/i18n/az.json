@@ -906,6 +906,8 @@
     "answer": "Cavabınız",
     "reply": "Cavab ver",
     "enough": "Bəsdir, generasiya et",
+    "interview_done": "Daha sual yoxdur",
+    "to_summary": "Xülasəyə keç",
     "progress": "Sual: {asked}. Token: {tokens}",
     "not_configured": "LLM qoşulmayıb: açar təşkilat parametrlərində göstərilir",
     "spec": {

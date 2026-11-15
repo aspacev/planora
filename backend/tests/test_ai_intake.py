@@ -1034,11 +1034,102 @@ def test_the_draft_is_built_from_the_approved_summary_not_from_the_file(db, org,
 
 def test_a_long_summary_of_a_specification_fits(db, org, user):
     """A few pages of requirements are more than the forty points an interview used to give."""
-    many = {"theses": [f"Требование {number}" for number in range(1, 101)]}
+    many = {"theses": [f"Требование {number}" for number in range(1, 201)]}
     provider = RecordedProvider([QUESTION, many])
     session = intake.start(db, org=org, user=user, locale="ru", provider=provider, spec=SPEC)
 
-    assert len(intake.make_summary(db, session, provider)) == 100
+    assert len(intake.make_summary(db, session, provider)) == 200
+
+
+def test_a_real_specification_fits_under_the_default_ceiling(db, org, user):
+    """The first real document uploaded was 46 000 characters and was refused at 30 000."""
+    provider = RecordedProvider([QUESTION])
+    long_spec = ("Требование к приложению. " * 2000).strip()
+    assert len(long_spec) > 46_000
+
+    session = intake.start(db, org=org, user=user, locale="ru", provider=provider, spec=long_spec)
+
+    assert session.spec == long_spec
+
+
+# --- the interview ends, the summary recovers -----------------------------------
+
+NOTHING_TO_ASK = {
+    "question": "",
+    "covered_topics": [topic["key"] for topic in intake.topics()],
+}
+
+
+def test_a_model_with_nothing_to_ask_ends_the_interview_instead_of_failing(db, org, user):
+    """A specification can answer everything; an empty question says so and is not a schema error."""
+    provider = RecordedProvider([NOTHING_TO_ASK, SUMMARY])
+
+    session = intake.start(db, org=org, user=user, locale="ru", provider=provider, spec=SPEC)
+
+    assert session.status == "interview"
+    # No turn: a turn is a question awaiting an answer, and there is none.
+    assert session.transcript == []
+    # The summary is reachable straight from here.
+    assert intake.make_summary(db, session, provider) == SUMMARY["theses"]
+
+
+def test_the_model_can_stop_asking_before_the_topics_run_out(db, org, user):
+    provider = RecordedProvider([QUESTION, {"question": "  ", "covered_topics": []}])
+    session = _interview(db, org, user, provider)
+
+    assert intake.answer(db, session, "Сайт-визитка", provider) is None
+    assert len(session.transcript) == 1
+    assert session.transcript[0]["answer"] == "Сайт-визитка"
+
+
+def test_the_model_is_told_it_may_stop(db, org, user):
+    provider = RecordedProvider([QUESTION])
+    _interview(db, org, user, provider)
+
+    assert "верни в question пустую строку" in provider.calls[0][-1]["content"]
+
+
+def test_a_summary_over_the_ceiling_is_asked_for_again_with_the_number(db, org, user):
+    """A long specification is where the model overshoots; the person must not get an error for it."""
+    from app.ai.schemas import MAX_THESES
+
+    too_many = {"theses": [f"Требование {number}" for number in range(MAX_THESES + 5)]}
+    provider = RecordedProvider([QUESTION, too_many, SUMMARY])
+    session = _interview(db, org, user, provider)
+
+    assert intake.make_summary(db, session, provider) == SUMMARY["theses"]
+    assert f"В прошлом ответе {MAX_THESES + 5} тезисов" in provider.calls[-1][-1]["content"]
+    assert session.status == "summary"
+
+
+def test_a_summary_that_keeps_failing_is_refused_with_the_session_intact(db, org, user, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_schema_retries", 1, raising=False)
+    empty = {"theses": []}
+    provider = RecordedProvider([QUESTION, empty, empty])
+    session = _interview(db, org, user, provider)
+
+    with pytest.raises(LlmError) as error:
+        intake.make_summary(db, session, provider)
+
+    assert error.value.code == "llm_schema_mismatch"
+    assert len(provider.calls) == 3
+    assert session.status == "interview"
+
+
+def test_a_schema_failure_names_the_field_in_the_log_but_not_the_value(db, org, user, caplog):
+    """One code reaches the person; the log has to say which field broke, without the project's text."""
+    import logging
+
+    provider = RecordedProvider([QUESTION, SUMMARY, BROKEN_DRAFT, BROKEN_DRAFT, BROKEN_DRAFT])
+    session = _at_the_summary(db, org, user, provider)
+
+    with caplog.at_level(logging.WARNING, logger="app.ai.schemas"), pytest.raises(LlmError):
+        intake.make_draft(db, session, provider)
+
+    assert "categories.0.tasks.0.start_date" in caplog.text
+    assert "Логотип" not in caplog.text
 
 
 # --- the specification over HTTP ------------------------------------------------

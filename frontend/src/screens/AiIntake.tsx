@@ -138,37 +138,56 @@ export function AiIntake() {
         <section className="settings">
           {/* The questions come one at a time: a list of twelve fields turns an interview into a
               questionnaire that gets filled in without reading. */}
-          {session.spec_chars > 0 && <p className="muted">{t("ai.spec.interview_hint")}</p>}
-          <p className="ai__question">{question?.question}</p>
-          <p className="field">
-            <label htmlFor="ai-answer">{t("ai.answer")}</label>
-            <textarea
-              id="ai-answer"
-              name="ai-answer"
-              rows={3}
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-            />
-          </p>
-          <div className="modal__actions">
-            <button
-              type="button"
-              disabled={answer.trim() === "" || reply.isPending || !waiting}
-              onClick={() => reply.mutate(answer.trim())}
-            >
-              {t("ai.reply")}
-            </button>
-            {/* The "enough, generate it" button is available at any step: without it a person for
-                whom everything is clear has to sit it out to the ceiling. */}
-            <button
-              type="button"
-              className="button--quiet"
-              onClick={() => summarize.mutate()}
-              disabled={summarize.isPending}
-            >
-              {t("ai.enough")}
-            </button>
-          </div>
+          {session.spec_chars > 0 && waiting && (
+            <p className="muted">{t("ai.spec.interview_hint")}</p>
+          )}
+          {waiting ? (
+            <>
+              <p className="ai__question">{question?.question}</p>
+              <p className="field">
+                <label htmlFor="ai-answer">{t("ai.answer")}</label>
+                <textarea
+                  id="ai-answer"
+                  name="ai-answer"
+                  rows={3}
+                  value={answer}
+                  onChange={(event) => setAnswer(event.target.value)}
+                />
+              </p>
+              <div className="modal__actions">
+                <button
+                  type="button"
+                  disabled={answer.trim() === "" || reply.isPending}
+                  onClick={() => reply.mutate(answer.trim())}
+                >
+                  {t("ai.reply")}
+                </button>
+                {/* The "enough, generate it" button is available at any step: without it a person
+                    for whom everything is clear has to sit it out to the ceiling. */}
+                <button
+                  type="button"
+                  className="button--quiet"
+                  onClick={() => summarize.mutate()}
+                  disabled={summarize.isPending}
+                >
+                  {t("ai.enough")}
+                </button>
+              </div>
+            </>
+          ) : (
+            // The interview is over: every topic is covered, the ceiling is reached, or the model
+            // found nothing to ask about a specification. The last question with an emptied field
+            // and a disabled button used to stay here, and nothing said that the next move was
+            // the person's.
+            <>
+              <p className="ai__question">{t("ai.interview_done")}</p>
+              <div className="modal__actions">
+                <button type="button" onClick={() => summarize.mutate()} disabled={summarize.isPending}>
+                  {t("ai.to_summary")}
+                </button>
+              </div>
+            </>
+          )}
           <p className="muted">
             {t("ai.progress", {
               asked: session.transcript.length,

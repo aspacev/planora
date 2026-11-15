@@ -302,6 +302,46 @@ describe("интервью", () => {
   });
 });
 
+describe("конец интервью", () => {
+  it("после последнего ответа экран зовёт к конспекту, а не оставляет пустое поле", async () => {
+    const calls = aiFixtures();
+    server.use(
+      http.post("/api/ai/sessions/s1/answers", () =>
+        HttpResponse.json({
+          ...SESSION,
+          transcript: [{ ...SESSION.transcript[0], answer: "Сайт-визитка" }],
+        }),
+      ),
+    );
+    renderApp({ route: "/projects/new/ai" });
+    await userEvent.click(await screen.findByRole("button", { name: "Начать интервью" }));
+    await userEvent.type(await screen.findByLabelText("Ваш ответ"), "Сайт-визитка");
+    await userEvent.click(screen.getByRole("button", { name: "Ответить" }));
+
+    expect(await screen.findByText("Вопросов больше нет")).toBeInTheDocument();
+    // Nothing left to type into, and one obvious way forward.
+    expect(screen.queryByLabelText("Ваш ответ")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Перейти к конспекту" }));
+
+    await waitFor(() => expect(calls).toContain("summary"));
+  });
+
+  it("ТЗ, на которое нечего спросить, сразу ведёт к конспекту", async () => {
+    aiFixtures();
+    server.use(
+      http.post("/api/ai/sessions", () =>
+        HttpResponse.json({ ...SESSION, spec_chars: 900, transcript: [] }, { status: 201 }),
+      ),
+    );
+    renderApp({ route: "/projects/new/ai" });
+    await userEvent.type(await screen.findByLabelText("Текст ТЗ"), "Сайт-визитка к июню");
+    await userEvent.click(screen.getByRole("button", { name: "Разобрать ТЗ" }));
+
+    expect(await screen.findByText("Вопросов больше нет")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Перейти к конспекту" })).toBeEnabled();
+  });
+});
+
 describe("старт с технического задания", () => {
   const SPEC = "Сайт-визитка. Главная страница с формой заявки. Срок — 1 июня.";
 

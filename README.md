@@ -54,7 +54,7 @@ Planora is a multi-tenant project planner built for agencies, integrators, and d
 teams whose plans are commitments to someone outside the team. It keeps the whole
 lifecycle of a plan in one place:
 
-1. **Scope it** — through a structured AI interview, a Jira import, or by hand.
+1. **Scope it** — through a structured AI interview or by hand.
 2. **Price it** — a proposal module turns the plan into a quote and, once agreed, into real tasks.
 3. **Commit to it** — approve a baseline; later slips must be explained, not hidden.
 4. **Run it** — drag-and-drop Gantt editing, dependencies, critical path, live multi-user updates.
@@ -73,7 +73,7 @@ and a backup sidecar. No message broker, no Redis, no external SaaS dependency.
 | **Planning model** | Project → Category → Task, with dependencies, milestones, criticality, progress, assignees, risk flags, and internal notes. |
 | **Time model** | Relative plans ("Week 1 / Day 3") before a start date is set; calendar plans with working-day masks and holidays once it is. |
 | **Change control** | Revision journal with computed inverses; approved plan baselines with a per-project shift threshold that requires a reason for larger slips. |
-| **Integrations** | Any OpenAI-compatible LLM endpoint (bring your own key), Jira Cloud / Server, SMTP or HTTP mail APIs. |
+| **Integrations** | Any OpenAI-compatible LLM endpoint (bring your own key), SMTP or HTTP mail APIs. |
 | **Exports** | Excel workbook, PDF project document with a vector Gantt, client-facing proposal PDF. |
 | **Localization** | Azerbaijani, English, Russian — UI and generated documents. |
 | **Deployment** | Docker Compose (primary, with WebSocket live updates) or Vercel serverless with an external Postgres. |
@@ -179,14 +179,6 @@ journaled batch. A per-task *split into subtasks* action follows the same propos
 rule. Usage is metered per organization with a per-minute request cap and a daily token
 budget; a model failure never loses the conversation.
 
-### Jira import and sync
-
-Connect a Jira Cloud or Server instance with an API token, pick a project, and import its
-issues and epics into a plan: issues become tasks, epics become categories, and the whole
-import is one undo away like any other batch. Re-sync pulls status and date updates on
-demand; a manual push sends an adjusted due date back to Jira. Links between Jira entities
-and plan entities are persisted so repeated syncs update rather than duplicate.
-
 ### Live collaboration
 
 On the Docker deployment, every project has a WebSocket channel: revisions applied by one
@@ -274,7 +266,6 @@ flowchart LR
   end
 
   L["LLM endpoint<br/>OpenAI-compatible"]
-  J["Jira Cloud / Server"]
   S["SMTP or mail API"]
 
   B -- "HTTPS  /" --> C
@@ -284,7 +275,6 @@ flowchart LR
   A --> D
   K --> D
   A -. "https only · SSRF-guarded · no redirects" .-> L
-  A -. "https only · SSRF-guarded" .-> J
   A -.-> S
 ```
 
@@ -330,8 +320,8 @@ flowchart LR
 | Sessions | HTTP-only, same-site cookie; 30-day lifetime with a 7-day idle timeout; only token hashes are stored; "close other sessions" endpoint |
 | One-time tokens | Invitations, email verification, and password resets store SHA-256 hashes and reveal the raw token exactly once |
 | CSRF | `SameSite` cookie plus an `Origin`/`Referer` host check on every writing request as a second line of defense |
-| Secrets at rest | LLM keys and Jira tokens are Fernet-encrypted with a key derived from `APP_SECRET`, never returned by the API |
-| SSRF | Outbound calls to user-supplied URLs (LLM endpoint, Jira base URL) require HTTPS, must resolve only to public IP addresses, and never follow redirects; a documented opt-out exists for self-hosted models on a private network |
+| Secrets at rest | LLM keys are Fernet-encrypted with a key derived from `APP_SECRET`, never returned by the API |
+| SSRF | Outbound calls to user-supplied URLs (the LLM endpoint) require HTTPS, must resolve only to public IP addresses, and never follow redirects; a documented opt-out exists for self-hosted models on a private network |
 | Abuse limits | Durable, Postgres-backed throttles on login, signup, password reset, and per-organization AI calls (survive restarts, shared across replicas); a daily AI token budget per organization; in-memory limits on guest comments and exports |
 | Request hygiene | Request-body size cap before JSON parsing; sanitized `X-Request-ID` on every response and log line; field-length limits; per-project task cap |
 | Browser hardening | Content-Security-Policy, HSTS, `X-Frame-Options: DENY`, `nosniff`, strict referrer policy, server header removed (Caddy) |
@@ -386,7 +376,7 @@ start if a required setting is missing or a transport is half-configured.
 | `PUBLIC_SHARING_ENABLED` | | Kill switch for public links across the installation. |
 | `INVITE_TTL_DAYS`, `INVITE_RATE_LIMIT`, `GUEST_COMMENT_RATE_LIMIT` | | Onboarding and guest abuse limits. |
 | `EXPORT_VALIDITY_DAYS` | | "Valid until" stamp on generated documents. |
-| `AI_*`, `JIRA_*` | | Timeouts, retry counts, sync caps, and the private-network opt-outs for self-hosted endpoints. |
+| `AI_*` | | Timeouts, retry counts, limits, and the private-network opt-out for a self-hosted endpoint. |
 | `BACKUP_INTERVAL_SECONDS`, `BACKUP_KEEP_DAYS` | | Backup sidecar schedule and retention. |
 
 The full annotated list, with defaults, is in [`.env.example`](.env.example).
@@ -426,7 +416,7 @@ if they drift. See [Публикация на Vercel](README.ru.md#публик�
 
 Resource areas: `auth`, `org`, `invitations`, `projects` (plan mutations, undo, approvals,
 comments, revisions), `proposal`, `scorecard`, `export`, `sharing`, `public`, `live`
-(WebSocket), `ai`, `jira`, `admin`, `meta`.
+(WebSocket), `ai`, `admin`, `meta`.
 
 ---
 
@@ -461,7 +451,7 @@ authoritative definition of "green".
 - Backend tests run against a real PostgreSQL database, not SQLite or mocks, so constraints,
   JSONB queries, and migrations are exercised for real. Migrations are tested for upgrade,
   downgrade, and parity with the ORM metadata.
-- External services (LLM, Jira, mail) are behind `Protocol` interfaces with recorded
+- External services (LLM, mail) are behind `Protocol` interfaces with recorded
   implementations; no test touches the network.
 - Frontend component tests use MSW for the API and a fake WebSocket harness for live
   updates. A dedicated test enforces the spacing scale in CSS so layout stays consistent.
@@ -475,7 +465,6 @@ backend/
   app/
     api/            one FastAPI router per resource area; deps.py = ProjectContext
     ai/             LLM credentials, provider, intake pipeline, SSRF guard, usage metering
-    jira/           Jira credentials, client, mapping, sync, SSRF guard
     export/         shared document snapshot, XLSX and PDF writers, proposal PDF
     mail/           SMTP / HTTP-API / log transports and localized templates
     models.py       every SQLAlchemy model and StrEnum, in one file on purpose

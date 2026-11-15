@@ -185,9 +185,6 @@ describe("подтверждения на экранах организации"
       http.get("/api/ai/credential", () =>
         HttpResponse.json({ provider: "openai", base_url: "", model: "", configured: false }),
       ),
-      http.get("/api/jira/credential", () =>
-        HttpResponse.json({ base_url: "", email: "", configured: false }),
-      ),
       http.patch("/api/org", async ({ request }) => {
         const patch = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({ ...ORG, ...patch });

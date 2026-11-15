@@ -605,10 +605,6 @@ describe("адреса списка", () => {
       "href",
       "/projects/new/ai",
     );
-    expect(screen.getByRole("link", { name: /импорт из jira/i })).toHaveAttribute(
-      "href",
-      "/projects/new/jira",
-    );
     expect(screen.getByRole("button", { name: /создать проект/i })).toBeInTheDocument();
   });
 });

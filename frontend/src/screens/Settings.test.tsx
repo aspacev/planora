@@ -29,10 +29,6 @@ function orgFixtures(role = "owner", settings: Patch = {}) {
     http.get("/api/ai/credential", () =>
       HttpResponse.json({ provider: "openai", base_url: "", model: "", configured: false }),
     ),
-    // The Jira connection block — by the same rule as the LLM above.
-    http.get("/api/jira/credential", () =>
-      HttpResponse.json({ base_url: "", email: "", configured: false }),
-    ),
     http.patch("/api/org", async ({ request }) => {
       const patch = (await request.json()) as Patch;
       patches.push(patch);
@@ -212,49 +208,6 @@ describe("настройки организации", () => {
     expect(await screen.findByLabelText("Часовой пояс")).toBeDisabled();
     expect(screen.getByText(/только владелец/)).toBeInTheDocument();
   });
-
-  it("подключение Jira сохраняется без повторного ввода токена, а после подключения можно отключить", async () => {
-    orgFixtures();
-    let saved: Record<string, unknown> | null = null;
-    server.use(
-      http.put("/api/jira/credential", async ({ request }) => {
-        saved = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({
-          base_url: "https://acme.atlassian.net",
-          email: "bot@acme.example",
-          configured: true,
-        });
-      }),
-      http.delete("/api/jira/credential", () => new HttpResponse(null, { status: 204 })),
-    );
-    renderApp({ route: "/settings/organization" });
-
-    const tokenField = await screen.findByLabelText("API-токен");
-    // The Jira form, not the LLM form: both have the same "Save connection" button caption,
-    // and without narrowing the query finds both at once.
-    const jiraForm = tokenField.closest("form") as HTMLElement;
-
-    await userEvent.type(within(jiraForm).getByLabelText("Адрес сайта (base URL)"), "https://acme.atlassian.net");
-    await userEvent.type(within(jiraForm).getByLabelText("Email аккаунта"), "bot@acme.example");
-    await userEvent.type(tokenField, "secret-token");
-    await userEvent.click(within(jiraForm).getByRole("button", { name: "Сохранить подключение" }));
-
-    await waitFor(() =>
-      expect(saved).toEqual({
-        base_url: "https://acme.atlassian.net",
-        email: "bot@acme.example",
-        api_token: "secret-token",
-      }),
-    );
-    // The token is not handed out: the field is empty again, "Token is set" is next to it.
-    await waitFor(() => expect(screen.getByLabelText("API-токен")).toHaveValue(""));
-    expect(await screen.findByText(/Токен задан/)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Отключить" }));
-    await userEvent.click(screen.getByRole("button", { name: "Да, отключить" }));
-
-    expect(await screen.findByText(/Токена пока нет/)).toBeInTheDocument();
-  });
 });
 
 describe("настройки проекта", () => {
@@ -341,90 +294,6 @@ describe("настройки проекта", () => {
     await userEvent.clear(await screen.findByLabelText("Целевая дата"));
 
     await waitFor(() => expect(patches).toEqual([{ deadline: null }]));
-  });
-
-  it("панель Jira молчит у обычного проекта, не заведённого импортом", async () => {
-    projectSettingsFixtures();
-    renderApp({ route: "/projects/p1/settings" });
-
-    await screen.findByLabelText("Целевая дата"); // the screen is definitely drawn
-    expect(screen.queryByText("Синхронизировать сейчас")).toBeNull();
-  });
-
-  it("у проекта, заведённого из Jira, панель показывает время синхронизации и синхронизирует по кнопке", async () => {
-    projectSettingsFixtures();
-    server.use(
-      http.get("/api/projects/p1/jira", () =>
-        HttpResponse.json({
-          linked: true,
-          jira_project_key: "PROJ",
-          jql: 'project = "PROJ" ORDER BY created ASC',
-          last_synced_at: "2026-08-19T10:00:00+00:00",
-        }),
-      ),
-      http.post("/api/projects/p1/jira/sync", () =>
-        HttpResponse.json(
-          { batch_id: "b1", created_categories: 0, created_tasks: 2, updated_tasks: 1 },
-          { status: 201 },
-        ),
-      ),
-    );
-    renderApp({ route: "/projects/p1/settings" });
-
-    expect(await screen.findByText(/PROJ/)).toBeInTheDocument();
-    const button = screen.getByRole("button", { name: "Синхронизировать сейчас" });
-
-    await userEvent.click(button);
-
-    expect(await screen.findByText(/новых задач.*2.*обновлено.*1/)).toBeInTheDocument();
-  });
-
-  it("отправляет сроки в Jira по кнопке и показывает итог", async () => {
-    projectSettingsFixtures();
-    server.use(
-      http.get("/api/projects/p1/jira", () =>
-        HttpResponse.json({
-          linked: true,
-          jira_project_key: "PROJ",
-          jql: 'project = "PROJ" ORDER BY created ASC',
-          last_synced_at: "2026-08-19T10:00:00+00:00",
-        }),
-      ),
-      http.post("/api/projects/p1/jira/push", () =>
-        HttpResponse.json({ pushed: 2, unchanged: 1, failed: [] }, { status: 201 }),
-      ),
-    );
-    renderApp({ route: "/projects/p1/settings" });
-
-    const button = await screen.findByRole("button", { name: "Отправить в Jira" });
-    await userEvent.click(button);
-
-    expect(await screen.findByText(/отправлено.*2.*без изменений.*1/)).toBeInTheDocument();
-  });
-
-  it("отклонённые Jira задачи остаются на панели, а не исчезают вместе с тостом", async () => {
-    projectSettingsFixtures();
-    server.use(
-      http.get("/api/projects/p1/jira", () =>
-        HttpResponse.json({
-          linked: true,
-          jira_project_key: "PROJ",
-          jql: 'project = "PROJ" ORDER BY created ASC',
-          last_synced_at: null,
-        }),
-      ),
-      http.post("/api/projects/p1/jira/push", () =>
-        HttpResponse.json(
-          { pushed: 1, unchanged: 0, failed: [{ issue_key: "PROJ-9", code: "jira_refused" }] },
-          { status: 201 },
-        ),
-      ),
-    );
-    renderApp({ route: "/projects/p1/settings" });
-
-    await userEvent.click(await screen.findByRole("button", { name: "Отправить в Jira" }));
-
-    expect(await screen.findByText(/PROJ-9/)).toBeInTheDocument();
   });
 });
 

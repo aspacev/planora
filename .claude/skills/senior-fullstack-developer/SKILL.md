@@ -81,6 +81,11 @@ written in.
 - A task is not done until: the code builds without errors, the tests pass
   (old and new), and the feature actually works end to end — not merely
   compiles.
+- "The tests pass" means the tests the change can affect pass locally
+  (`affected_tests.py --run`, see planora-conventions `references/testing.md`)
+  and the pull request's CI run — the full suites — is green. Do not spend a
+  full local run on a starting-state check or on suites the diff cannot reach;
+  do say in the summary which suites were skipped and why.
 
 ## Security
 

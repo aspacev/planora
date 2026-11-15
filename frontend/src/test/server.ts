@@ -16,11 +16,6 @@ import { setupServer } from "msw/node";
  * An empty answer means "nothing has been discussed anywhere yet": that is where every project
  * begins, and in that state there is not a single number on the strip's rows.
  *
- * The Jira link is asked for by the project's settings on every render — the sync panel stays silent
- * until the "not linked" answer arrives, but the request goes out anyway, and tests that are not
- * about Jira (the public link, deleting a project, the toasts) have no reason to declare it
- * themselves every time.
- *
  * The install's settings are asked for by the application's frame — the "address not confirmed"
  * strip. Mail is enabled: this is an ordinary install, and a test about address confirmation must
  * not start by declaring a mail server.
@@ -39,7 +34,4 @@ export const server = setupServer(
   http.get("/api/org/list", () => HttpResponse.json([])),
   http.get("/api/projects/:projectId/comments/counts", () => HttpResponse.json({})),
   http.get("/api/public/:orgSlug/:projectSlug/comments/counts", () => HttpResponse.json({})),
-  http.get("/api/projects/:projectId/jira", () =>
-    HttpResponse.json({ linked: false, jira_project_key: null, jql: null, last_synced_at: null }),
-  ),
 );

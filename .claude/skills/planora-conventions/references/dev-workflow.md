@@ -4,6 +4,10 @@ Source of truth is `.github/workflows/ci.yml` — three jobs (backend,
 frontend, docker). The README explains the same things for humans with more
 context; this file is the condensed command list.
 
+These are the *full* commands — what CI runs. Day to day, do not run the full
+suites: `scripts/affected_tests.py` picks what a diff needs and
+`scripts/test-env.sh` prepares a fresh container; see `testing.md`.
+
 ## Backend (Python / FastAPI)
 
 ```sh
